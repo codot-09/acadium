@@ -8,6 +8,7 @@ import {
   groupSessions,
   messages,
   notifications,
+  submissions,
   teacherStudentLinks,
   teacherInvites,
   telegramProfiles,
@@ -106,6 +107,17 @@ export async function setTelegramProfileRole(profileId: number, role: "teacher" 
   return rows[0];
 }
 
+export async function getOrCreateIndividualConversation(teacherProfileId: number, studentProfileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const existing = await db.select().from(conversations).where(and(eq(conversations.ownerProfileId, teacherProfileId), eq(conversations.participantProfileId, studentProfileId), eq(conversations.kind, "individual"))).limit(1);
+  if (existing[0]) return existing[0];
+  const id = nanoid();
+  await db.insert(conversations).values({ id, ownerProfileId: teacherProfileId, participantProfileId: studentProfileId, kind: "individual", title: "Student conversation" });
+  const rows = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+  return rows[0]!;
+}
+
 export async function getOrCreateAssistantConversation(profileId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -127,7 +139,7 @@ export async function getConversationMessages(conversationId: string) {
   return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
 }
 
-export async function saveMessage(conversationId: string, sender: "user" | "assistant" | "system", content: string) {
+export async function saveMessage(conversationId: string, sender: "user" | "assistant" | "system" | "teacher" | "student", content: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const id = nanoid();
@@ -162,6 +174,20 @@ export async function getStudentDashboard(profileId: number) {
   return { assignments: assignmentRows, teacherLinks: links };
 }
 
+export async function getStudentSubmissionsForTeacher(teacherProfileId: number, studentProfileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select({ submission: submissions, assignment: assignments }).from(submissions).innerJoin(assignments, eq(submissions.assignmentId, assignments.id)).where(and(eq(assignments.teacherProfileId, teacherProfileId), eq(submissions.studentProfileId, studentProfileId))).orderBy(desc(submissions.submittedAt));
+}
+
+export async function saveAiMaterial(input: { teacherProfileId: number; prompt: string; material: { title: string; lessonPlan: string; quiz: string; slides: Array<{ title: string; content: string; imageDescription: string }> } }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const id = nanoid();
+  await db.insert(aiMaterials).values({ id, teacherProfileId: input.teacherProfileId, prompt: input.prompt, title: input.material.title, lessonPlan: input.material.lessonPlan, quiz: input.material.quiz, slidesJson: JSON.stringify(input.material.slides) });
+  return (await db.select().from(aiMaterials).where(eq(aiMaterials.id, id)).limit(1))[0]!;
+}
+
 export async function createAssignment(input: { teacherProfileId: number; studentProfileId: number; title: string; instructions: string; dueAt?: Date }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -170,6 +196,25 @@ export async function createAssignment(input: { teacherProfileId: number; studen
   await createNotification(input.studentProfileId, "assignment", `Yangi topshiriq: ${input.title}`);
   const rows = await db.select().from(assignments).where(eq(assignments.id, id)).limit(1);
   return rows[0]!;
+}
+
+export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const id = nanoid();
+  await db.insert(groupSessions).values({ ...input, id, status: "live", startedAt: new Date() });
+  const links = await db.select().from(teacherStudentLinks).where(eq(teacherStudentLinks.teacherProfileId, input.teacherProfileId));
+  await Promise.all(links.map(link => createNotification(link.studentProfileId, "session", `Yangi online session: ${input.title}`)));
+  return (await db.select().from(groupSessions).where(eq(groupSessions.id, id)).limit(1))[0]!;
+}
+
+export async function submitAssignment(input: { assignmentId: string; studentProfileId: number; response: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const id = nanoid();
+  await db.insert(submissions).values({ id, ...input });
+  await db.update(assignments).set({ status: "submitted" }).where(eq(assignments.id, input.assignmentId));
+  return (await db.select().from(submissions).where(eq(submissions.id, id)).limit(1))[0]!;
 }
 
 export async function createTeacherInvite(createdByUserId: number, expiresInDays = 7) {
@@ -195,5 +240,19 @@ export async function redeemTeacherInvite(code: string, profileId: number) {
 export async function createNotification(profileId: number, type: "assignment" | "session" | "general", body: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  await db.insert(notifications).values({ id: nanoid(), profileId, type, body });
+  const id = nanoid();
+  await db.insert(notifications).values({ id, profileId, type, body });
+  const profileRows = await db.select({ chatId: telegramProfiles.chatId }).from(telegramProfiles).where(eq(telegramProfiles.id, profileId)).limit(1);
+  const chatId = profileRows[0]?.chatId;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!chatId || !token) return { id, deliveryStatus: "queued" as const };
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: chatId, text: body }) });
+    if (!response.ok) throw new Error(`Telegram notification failed: ${response.status}`);
+    await db.update(notifications).set({ deliveryStatus: "sent", sentAt: new Date() }).where(eq(notifications.id, id));
+    return { id, deliveryStatus: "sent" as const };
+  } catch {
+    await db.update(notifications).set({ deliveryStatus: "failed" }).where(eq(notifications.id, id));
+    return { id, deliveryStatus: "failed" as const };
+  }
 }

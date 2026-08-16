@@ -8,7 +8,9 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { generateAcadiumResponse, streamText } from "../ai";
+import { generateAcadiumResponse, generateStructuredMaterial, materialToMarkdown, streamText } from "../ai";
+import { saveAiMaterial, upsertTelegramProfile } from "../db";
+import { verifyTelegramInitData } from "../telegram";
 import { handleTelegramUpdate, verifyWebhookSecret } from "../telegramBot";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -43,15 +45,25 @@ async function startServer() {
       const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
       const role = req.body?.role === "student" ? "student" : "teacher";
       if (!prompt) return res.status(400).json({ error: "prompt is required" });
-      const answer = await generateAcadiumResponse(prompt, role);
+      let answer: string;
+      if (role === "teacher" && typeof req.body?.initData === "string" && process.env.TELEGRAM_BOT_TOKEN) {
+        const identity = verifyTelegramInitData(req.body.initData, process.env.TELEGRAM_BOT_TOKEN);
+        const profile = await upsertTelegramProfile(identity);
+        if (!profile) throw new Error("Telegram profile unavailable");
+        const material = await generateStructuredMaterial(prompt);
+        await saveAiMaterial({ teacherProfileId: profile.id, prompt, material });
+        answer = materialToMarkdown(material);
+      } else {
+        answer = await generateAcadiumResponse(prompt, role);
+      }
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       for await (const chunk of streamText(answer)) {
         if (res.writableEnded) break;
-        res.write(`data: ${JSON.stringify({ text: chunk })}\\n\\n`);
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
-      res.write("data: [DONE]\\n\\n");
+      res.write("data: [DONE]\n\n");
       res.end();
     } catch (error) {
       if (!res.headersSent) res.status(500).json({ error: error instanceof Error ? error.message : "AI generation failed" });

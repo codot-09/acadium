@@ -2,20 +2,32 @@
 
 - [x] Telegram Mini App ochilganda imzolangan `initData`ni backendda tekshirib, Telegram chat ID, ism va username’ni profilga jimgina saqlash.
 - [x] Teacher va student rollari, alohida panellar hamda xavfsiz rol almashtirish oqimini yaratish.
-- [ ] Har bir foydalanuvchi uchun saqlanadigan xabarlar tarixiga ega AI chat yaratish.
-- [ ] Bitta promptdan dars rejasi, test va taqdimot tuzilmasini stream qiluvchi AI generatorni yaratish.
-- [ ] Teacher dashboardida o‘quvchilar ro‘yxati, AI materiallar tarixi va session metrikalarini ko‘rsatish.
-- [ ] Individual o‘quvchi chatlari, topshiriqlar va natijalarni kuzatish oqimini yaratish.
-- [ ] Guruh sessionlari, ro‘yxatdan o‘tish va savol-javoblar uchun ma’lumot modelini yaratish.
+- [x] Har bir foydalanuvchi uchun saqlanadigan xabarlar tarixiga ega AI chat yaratish.
+- [x] Bitta promptdan dars rejasi, test va taqdimot tuzilmasini stream qiluvchi AI generatorni yaratish.
+- [x] Teacher dashboardida o‘quvchilar ro‘yxati, AI materiallar tarixi va session metrikalarini ko‘rsatish.
+- [x] Individual o‘quvchi chatlari, topshiriqlar va natijalarni kuzatish oqimini yaratish.
+- [x] Guruh sessionlari, ro‘yxatdan o‘tish va savol-javoblar uchun ma’lumot modelini yaratish.
 - [x] Telegram Bot API webhook handlerini, bot yangilanishlarini qayta ishlashni va imzo sarlavhasi tekshiruvini yaratish.
-- [ ] Yangi topshiriq yoki sessionga tegishli o‘quvchilar uchun avtomatik Telegram bildirishnomalarini yuborish.
+- [x] Yangi topshiriq yoki sessionga tegishli o‘quvchilar uchun avtomatik Telegram bildirishnomalarini yuborish.
 - [x] Sacred geometry vizual tizimi, desktop/mobile responsivlik va Telegram ichidagi ko‘rinishni takomillashtirish.
 - [x] Unit testlar, build tekshiruvi va yakuniy vizual QA o‘tkazish.
 - [x] Telegram bot tokenini qo‘shib, webhook manzilini BotFather orqali ulash bo‘yicha yakuniy sozlash yo‘riqnomasini tayyorlash.
 - [x] Teacher roliga o‘tishni approval yoki invite asosidagi xavfsiz oqim bilan cheklash.
 - [x] `TELEGRAM_WEBHOOK_SECRET`ni majburiy qilish, qabul/reject testlarini yozish va webhook sozlash yo‘riqnomasini to‘ldirish.
 - [x] BotFather, production webhook URL, maxfiy webhook tokeni va guruh administratorligi bo‘yicha end-to-end setup guide yaratish.
-- [ ] AI chat tarixini backenddan yuklash va real SSE oqimini frontendga ulash.
-- [ ] Assignment/session bildirishnomalarini Telegram Bot API orqali real yuborish.
+- [x] AI chat tarixini backenddan yuklash va real SSE oqimini frontendga ulash.
+- [x] Assignment/session bildirishnomalarini Telegram Bot API orqali real yuborish.
 - [x] Teacher promotion uchun admin-approved yoki invite-token asosidagi haqiqiy aktivatsiya oqimini serverda saqlash.
 - [x] Teacher promotionning ruxsatsiz rad etilishi va tasdiqlangan invite bilan ishlashiga test yozish.
+- [x] SSE parserni partial frame buffer bilan production-safe qilish va fallback assistant javoblarini ham saqlash.
+- [x] Structured AI output orqali lesson plan, quiz va presentation outline’ni majburiy validatsiya qilish hamda `ai_materials`ga saqlash.
+- [x] Teacher dashboardiga AI material history va real session statistikasi bo‘limlarini ko‘rsatish.
+- [x] Individual student workflow UI, conversation exchange va submission/result monitoringni qo‘shish.
+- [x] Teacher dashboardida material history ro‘yxati va mazmunli session metrics jadvalini ko‘rsatish.
+- [x] Real student profile ID bilan individual workspace, message exchange va submission review panelini qurish.
+- [x] Dashboardda AI material history ro‘yxati, prompt va created time bilan view/export actionlarini ko‘rsatish.
+- [x] Individual workspace uchun haqiqiy submission/results query va status UI qo‘shish.
+- [x] Individual threadda teacher/student sender rollari va end-to-end message oqimini yakunlash.
+- [x] Saved material history uchun alohida View action qo‘shish.
+- [x] Individual conversationda explicit teacher/student sender rollarini va query invalidationni qo‘shish.
+- [x] Saved AI material View panelida saqlangan lesson plan, quiz va slides ma’lumotlarini hardcoded matnsiz render qilish.

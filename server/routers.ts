@@ -6,11 +6,15 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
   createAssignment,
+  createGroupSession,
   createTeacherInvite,
+  getOrCreateIndividualConversation,
+  submitAssignment,
   redeemTeacherInvite,
   getConversationMessages,
   getOrCreateAssistantConversation,
   getStudentDashboard,
+  getStudentSubmissionsForTeacher,
   getTeacherDashboard,
   getTelegramProfileById,
   saveMessage,
@@ -91,11 +95,45 @@ export const appRouter = router({
       const conversation = await getOrCreateAssistantConversation(profile.id);
       return saveMessage(conversation.id, "user", input.content);
     }),
+    saveAssistantMessage: publicProcedure.input(telegramInput.extend({ content: z.string().trim().min(1).max(20_000) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getOrCreateAssistantConversation(profile.id);
+      return saveMessage(conversation.id, "assistant", input.content);
+    }),
+    individualHistory: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1) })).query(async ({ input }) => {
+      await getTelegramProfile(input.initData);
+      return getConversationMessages(input.conversationId);
+    }),
+    sendIndividualMessage: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1), content: z.string().trim().min(1).max(12_000) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      return saveMessage(input.conversationId, profile.role === "teacher" ? "teacher" : "student", input.content);
+    }),
+  }),
+  student: router({
+    submitAssignment: publicProcedure.input(telegramInput.extend({ assignmentId: z.string().min(1), response: z.string().trim().min(1).max(20_000) })).mutation(async ({ input }) => {
+      const student = await getTelegramProfile(input.initData);
+      if (student.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "Student access is required" });
+      return submitAssignment({ assignmentId: input.assignmentId, studentProfileId: student.id, response: input.response });
+    }),
   }),
   teacher: router({
     createInvite: protectedProcedure.input(z.object({ expiresInDays: z.number().int().min(1).max(30).default(7) })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access is required" });
       return createTeacherInvite(ctx.user.id, input.expiresInDays);
+    }),
+    openStudentChat: publicProcedure.input(telegramInput.extend({ studentProfileId: z.number().int().positive() })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      const student = await getTelegramProfileById(input.studentProfileId);
+      if (!student || student.role !== "student") throw new TRPCError({ code: "BAD_REQUEST", message: "Student profile is invalid" });
+      return getOrCreateIndividualConversation(teacher.id, student.id);
+    }),
+    startGroupSession: publicProcedure.input(telegramInput.extend({ telegramGroupId: z.string().min(1), groupTitle: z.string().min(1), title: z.string().min(3), topic: z.string().min(3) })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return createGroupSession({ teacherProfileId: teacher.id, telegramGroupId: input.telegramGroupId, groupTitle: input.groupTitle, title: input.title, topic: input.topic });
+    }),
+    studentResults: publicProcedure.input(telegramInput.extend({ studentProfileId: z.number().int().positive() })).query(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return getStudentSubmissionsForTeacher(teacher.id, input.studentProfileId);
     }),
     assignTask: publicProcedure.input(telegramInput.extend({
       studentProfileId: z.number().int().positive(),
