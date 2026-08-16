@@ -47,3 +47,23 @@
 - [x] Sidebar menyulari fixed, chat thread scrollable va composer pastga fixed/stable layout bo‘lishini ta’minlash.
 - [x] Desktop/mobile delete va fixed layout QA, TypeScript, Vitest va production buildni tekshirish.
 - [x] Delete qilinganda `chat.thread` cache’ini invalidate/remove qilib, active state’ni barqaror yangilash.
+- [x] Telegram group chat, teacher va bot admin statusini xavfsiz aniqlash.
+- [x] Group membership, teacher-student links va lesson session ma’lumotlarini real database’da saqlash.
+- [x] Teacher groupda `/lesson <slug>` komandasi bilan lesson sessionni boshlashi.
+- [x] Group a’zolarini session davomida student sifatida ro‘yxatga olish va duplicate eventlardan himoyalash.
+- [x] Native group interaction: lesson intro, savol yuborish, student javoblari va session yakuni.
+- [x] Group eventlari asosida student progress, participation va response statistikalarini hisoblash.
+- [x] Teacher Analyze menyusiga real group session va student participation analyticsini qo‘shish.
+- [x] Telegram webhook security, authorization, idempotency, Vitest, production build va setup guide tekshiruvlarini bajarish.
+- [x] Botning guruhdagi o‘z admin statusi va zarur group permissions tekshiruvini qo‘shish.
+- [x] Group roster uchun alohida persistence jadvali yoki modelini yaratish.
+- [x] Telegram update ID/event key deduplication va group event idempotency’ni joriy qilish.
+- [x] Per-student va per-session attendance, participation, response count va last activity analyticsini hisoblash.
+- [x] `/lesson`, `/ask`, `/endlesson`, member join, duplicate update, unauthorized teacher va non-admin bot holatlari uchun webhook testlarini yozish.
+- [x] Per-session analyticsni qaytarish: attendance, response count, participation summary va last activity.
+- [x] Per-student attendance metricini Analyze ko‘rinishida ko‘rsatish.
+- [x] `handleTelegramUpdate` uchun `/lesson`, `/ask`, `/endlesson`, member join, duplicate update, unauthorized teacher va non-admin bot integration testlarini qo‘shish.
+- [x] `handleTelegramUpdate` uchun `/ask` integration testini qo‘shish.
+- [x] `handleTelegramUpdate` uchun `/endlesson` integration testini qo‘shish.
+- [x] Webhook darajasida duplicate `update_id` deduplication testini qo‘shish.
+- [x] `/api/telegram/webhook` endpoint-level testida bir xil `update_id` ikki marta yuborilganda handler faqat bir marta ishlashini tekshirish.

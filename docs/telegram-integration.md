@@ -35,3 +35,19 @@ Bot tokeni kiritilgach, production domenidagi `/api/telegram/webhook` manzili Bo
 6. Tekshiruv: `getWebhookInfo` orqali webhook manzilini va oxirgi xatoni ko‘ring; Acadium testlari `TELEGRAM_BOT_TOKEN`ni `getMe` orqali va webhook secret qoidalarini lokal test orqali tekshiradi.
 
 Webhook secret majburiy: sarlavha yo‘q yoki noto‘g‘ri bo‘lgan so‘rovlar 401 bilan rad etiladi. Teacher roli ham serverda administrator tomonidan berilgan profil roli bilan cheklangan; oddiy foydalanuvchi UI tugmasi orqali o‘zini teacher qila olmaydi.
+
+## Group lesson arxitekturasi uchun rasmiy tekshiruv
+
+Telegram Bot API rasmiy hujjatiga ko‘ra, `setWebhook` bot uchun incoming update’larni HTTPS POST orqali qabul qilish imkonini beradi. Group lesson oqimi webhook asosida ishlaydi: `/lesson <slug>` komandasi update’dan olinadi, teacher vakolati groupdagi `administrator` yoki `creator` statusi bilan tekshiriladi, so‘ng lesson session database’da yaratiladi.
+
+Bot groupdagi barcha message eventlarini ko‘rishi uchun privacy mode va admin huquqlari muhim. Production sozlamasida bot guruhga administrator qilib qo‘shiladi; BotFather’dagi privacy sozlamasi groupdagi dars javoblarini qabul qilish talabiga mos qilinadi. `chat_member` update’lari orqali groupga qo‘shilgan yoki chiqqan a’zolarni rosterga sinxronlash mumkin; Telegram hujjatlari bunday update’lar uchun bot administrator bo‘lishi kerakligini ta’kidlaydi.
+
+Manbalar: https://core.telegram.org/bots/api, https://core.telegram.org/bots/features, https://core.telegram.org/bots/api-changelog
+
+## Group lesson foydalanish oqimi
+
+Teacher botni o‘z guruhiga administrator qilib qo‘shadi. Bot webhooki production domeniga o‘rnatilgach, teacher guruhda `/lesson fotosintez-8-sinf` komandasi bilan lessonni boshlaydi. Acadium Telegram API orqali komandani yuborgan foydalanuvchi guruh administratori yoki creator ekanini tekshiradi; keyin sessionni `live` holatida database’ga saqlaydi.
+
+Dars paytida teacher `/ask Fotosintezning asosiy bosqichi nima?` komandasi bilan savol yuboradi. Groupdagi oddiy student xabarlari va `chat_member` qo‘shilish eventlari session rosteriga yoziladi, teacher-student linki idempotent tarzda yaratiladi va participation eventlari Analyze menyusida ko‘rinadi. `/endlesson` sessionni tugatadi va saqlangan student activity keyinchalik teacher dashboardida ishlatiladi.
+
+Guruhdagi eventlar to‘liq ko‘rinishi uchun bot administrator bo‘lishi va Telegram privacy mode sozlamasi group darslari talabiga mos bo‘lishi kerak. Botni guruhga qo‘shish va BotFather sozlamalari teacher tomonidan Telegram’da bajariladi.

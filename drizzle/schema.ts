@@ -118,6 +118,31 @@ export const sessionQuestions = mysqlTable("session_questions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("questions_session_idx").on(table.sessionId)]);
 
+export const telegramGroupMembers = mysqlTable("telegram_group_members", {
+  id: int("id").autoincrement().primaryKey(),
+  telegramGroupId: varchar("telegramGroupId", { length: 64 }).notNull(),
+  profileId: int("profileId").notNull(),
+  status: mysqlEnum("memberStatus", ["member", "restricted", "administrator", "creator", "left", "kicked"]).notNull().default("member"),
+  firstSeenAt: timestamp("firstSeenAt").defaultNow().notNull(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+}, table => [uniqueIndex("telegram_group_member_unique").on(table.telegramGroupId, table.profileId), index("telegram_group_member_group_idx").on(table.telegramGroupId)]);
+
+export const telegramProcessedUpdates = mysqlTable("telegram_processed_updates", {
+  updateId: varchar("updateId", { length: 64 }).primaryKey(),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+});
+
+export const groupSessionEvents = mysqlTable("group_session_events", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 32 }).notNull(),
+  profileId: int("profileId").notNull(),
+  telegramUserId: varchar("telegramUserId", { length: 64 }).notNull(),
+  eventType: mysqlEnum("eventType", ["join", "message", "question", "answer", "system"]).notNull(),
+  content: text("content").notNull(),
+  eventKey: varchar("eventKey", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("group_events_session_idx").on(table.sessionId), index("group_events_profile_idx").on(table.profileId), uniqueIndex("group_events_key_unique").on(table.eventKey)]);
+
 export const sessionAnswers = mysqlTable("session_answers", {
   id: int("id").autoincrement().primaryKey(),
   questionId: varchar("questionId", { length: 32 }).notNull(),

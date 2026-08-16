@@ -9,9 +9,11 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { generateAcadiumResponse, generateStructuredMaterial, materialToMarkdown, streamText } from "../ai";
-import { getConversationById, saveAiMaterial, saveMessage, upsertTelegramProfile } from "../db";
+import { claimTelegramUpdate, getConversationById, saveAiMaterial, saveMessage, upsertTelegramProfile } from "../db";
 import { verifyTelegramInitData } from "../telegram";
-import { handleTelegramUpdate, verifyWebhookSecret } from "../telegramBot";
+import { registerTelegramWebhook } from "../telegramBot";
+import type { TelegramUpdate } from "../telegramBot";
+import { createTelegramWebhookApp } from "../telegramWebhookRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -81,11 +83,8 @@ async function startServer() {
       else res.end();
     }
   });
-  app.post("/api/telegram/webhook", async (req, res) => {
-    const supplied = req.header("x-telegram-bot-api-secret-token");
-    if (!verifyWebhookSecret(supplied)) return res.sendStatus(401);
-    try { await handleTelegramUpdate(req.body); res.sendStatus(200); } catch (error) { console.error("[Telegram webhook]", error); res.sendStatus(200); }
-  });
+  const telegramWebhookApp = createTelegramWebhookApp({ expectedSecret: process.env.TELEGRAM_WEBHOOK_SECRET, claim: claimTelegramUpdate, handle: async body => { const { handleTelegramUpdate } = await import("../telegramBot"); await handleTelegramUpdate(body as TelegramUpdate); } });
+  app.use(telegramWebhookApp);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -102,12 +101,11 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
+    const port = await findAvailablePort(preferredPort);
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
-
+  registerTelegramWebhook().catch(error => console.error("[Telegram webhook] Registration failed:", error));
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });

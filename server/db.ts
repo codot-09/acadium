@@ -6,6 +6,10 @@ import {
   assignments,
   conversations,
   groupSessions,
+  groupSessionEvents,
+  sessionParticipants,
+  telegramGroupMembers,
+  telegramProcessedUpdates,
   messages,
   notifications,
   submissions,
@@ -188,11 +192,16 @@ export async function getTeacherAnalytics(profileId: number) {
   const [links, materials, sessions, assignmentsForTeacher] = await Promise.all([
     db.select().from(teacherStudentLinks).where(eq(teacherStudentLinks.teacherProfileId, profileId)),
     db.select({ id: aiMaterials.id, createdAt: aiMaterials.createdAt }).from(aiMaterials).where(eq(aiMaterials.teacherProfileId, profileId)),
-    db.select({ id: groupSessions.id, status: groupSessions.status, createdAt: groupSessions.createdAt }).from(groupSessions).where(eq(groupSessions.teacherProfileId, profileId)),
+    db.select({ id: groupSessions.id, title: groupSessions.title, groupTitle: groupSessions.groupTitle, status: groupSessions.status, createdAt: groupSessions.createdAt }).from(groupSessions).where(eq(groupSessions.teacherProfileId, profileId)),
     db.select({ id: assignments.id, status: assignments.status, createdAt: assignments.createdAt }).from(assignments).where(eq(assignments.teacherProfileId, profileId)),
   ]);
   const assignmentIds = assignmentsForTeacher.map(item => item.id);
-  const submissionsForTeacher = assignmentIds.length ? await db.select().from(submissions).where(inArray(submissions.assignmentId, assignmentIds)) : [];
+  const sessionIds = sessions.map(item => item.id);
+  const [submissionsForTeacher, sessionMembers, sessionEvents] = await Promise.all([
+    assignmentIds.length ? db.select().from(submissions).where(inArray(submissions.assignmentId, assignmentIds)) : Promise.resolve([]),
+    sessionIds.length ? db.select().from(sessionParticipants).where(inArray(sessionParticipants.sessionId, sessionIds)) : Promise.resolve([]),
+    sessionIds.length ? db.select().from(groupSessionEvents).where(inArray(groupSessionEvents.sessionId, sessionIds)) : Promise.resolve([]),
+  ]);
   const reviewed = submissionsForTeacher.filter(item => item.status === "reviewed").length;
   const activityMap = new Map<string, { label: string; materials: number; sessions: number; assignments: number }>();
   for (let index = 6; index >= 0; index -= 1) {
@@ -202,7 +211,20 @@ export async function getTeacherAnalytics(profileId: number) {
   }
   const increment = (date: Date, field: "materials" | "sessions" | "assignments") => { const item = activityMap.get(new Date(date).toISOString().slice(0, 10)); if (item) item[field] += 1; };
   materials.forEach(item => increment(item.createdAt, "materials")); sessions.forEach(item => increment(item.createdAt, "sessions")); assignmentsForTeacher.forEach(item => increment(item.createdAt, "assignments"));
-  return { students: links.length, materials: materials.length, sessions: sessions.length, assignments: assignmentsForTeacher.length, submissions: submissionsForTeacher.length, reviewedSubmissions: reviewed, reviewRate: submissionsForTeacher.length ? Math.round((reviewed / submissionsForTeacher.length) * 100) : 0, activity: Array.from(activityMap.values()) };
+  const uniqueGroupStudents = new Set(sessionMembers.map(item => item.profileId));
+  const groupAnswers = sessionEvents.filter(item => item.eventType === "answer").length;
+  const profileIds = Array.from(uniqueGroupStudents);
+  const groupProfiles = profileIds.length ? await db.select().from(telegramProfiles).where(inArray(telegramProfiles.id, profileIds)) : [];
+  const groupStudentBreakdown = groupProfiles.map(profile => {
+    const events = sessionEvents.filter(event => event.profileId === profile.id);
+    return { profileId: profile.id, name: [profile.firstName, profile.lastName].filter(Boolean).join(" "), username: profile.username, attendance: new Set(events.map(event => event.sessionId)).size, participation: events.filter(event => ["message", "answer", "question"].includes(event.eventType)).length, answers: events.filter(event => event.eventType === "answer").length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
+  }).sort((left, right) => right.participation - left.participation);
+  const sessionAnalytics = sessions.map(session => {
+    const members = sessionMembers.filter(member => member.sessionId === session.id);
+    const events = sessionEvents.filter(event => event.sessionId === session.id);
+    return { sessionId: session.id, title: session.title, groupTitle: session.groupTitle, status: session.status, attendance: members.length, responses: events.filter(event => event.eventType === "answer").length, participation: events.filter(event => ["message", "answer", "question"].includes(event.eventType)).length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? session.createdAt };
+  });
+  return { students: links.length, materials: materials.length, sessions: sessions.length, assignments: assignmentsForTeacher.length, submissions: submissionsForTeacher.length, reviewedSubmissions: reviewed, reviewRate: submissionsForTeacher.length ? Math.round((reviewed / submissionsForTeacher.length) * 100) : 0, groupStudents: uniqueGroupStudents.size, groupMessages: sessionEvents.filter(item => item.eventType === "message" || item.eventType === "answer").length, groupAnswers, groupStudentBreakdown, sessionAnalytics, activity: Array.from(activityMap.values()) };
 }
 
 export async function getTeacherDashboard(profileId: number) {
@@ -253,6 +275,60 @@ export async function createAssignment(input: { teacherProfileId: number; studen
   await createNotification(input.studentProfileId, "assignment", `Yangi topshiriq: ${input.title}`);
   const rows = await db.select().from(assignments).where(eq(assignments.id, id)).limit(1);
   return rows[0]!;
+}
+
+export async function getActiveGroupSession(telegramGroupId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const rows = await db.select().from(groupSessions).where(and(eq(groupSessions.telegramGroupId, telegramGroupId), eq(groupSessions.status, "live"))).orderBy(desc(groupSessions.createdAt)).limit(1);
+  return rows[0];
+}
+
+export async function claimTelegramUpdate(updateId: number | string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const key = String(updateId);
+  const existing = await db.select().from(telegramProcessedUpdates).where(eq(telegramProcessedUpdates.updateId, key)).limit(1);
+  if (existing[0]) return false;
+  try { await db.insert(telegramProcessedUpdates).values({ updateId: key }); return true; } catch { return false; }
+}
+
+export async function upsertTelegramGroupMember(input: { telegramGroupId: string; profileId: number; status: "member" | "restricted" | "administrator" | "creator" | "left" | "kicked" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const existing = await db.select().from(telegramGroupMembers).where(and(eq(telegramGroupMembers.telegramGroupId, input.telegramGroupId), eq(telegramGroupMembers.profileId, input.profileId))).limit(1);
+  if (existing[0]) {
+    await db.update(telegramGroupMembers).set({ status: input.status, lastSeenAt: new Date() }).where(eq(telegramGroupMembers.id, existing[0].id));
+    return;
+  }
+  await db.insert(telegramGroupMembers).values(input);
+}
+
+export async function updateGroupSessionStatus(sessionId: string, status: "planned" | "live" | "ended") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(groupSessions).set({ status, endedAt: status === "ended" ? new Date() : undefined }).where(eq(groupSessions.id, sessionId));
+  return (await db.select().from(groupSessions).where(eq(groupSessions.id, sessionId)).limit(1))[0];
+}
+
+export async function ensureTeacherStudentLink(teacherProfileId: number, studentProfileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const existing = await db.select().from(teacherStudentLinks).where(and(eq(teacherStudentLinks.teacherProfileId, teacherProfileId), eq(teacherStudentLinks.studentProfileId, studentProfileId))).limit(1);
+  if (!existing[0]) await db.insert(teacherStudentLinks).values({ teacherProfileId, studentProfileId });
+}
+
+export async function ensureSessionParticipant(sessionId: string, profileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const existing = await db.select().from(sessionParticipants).where(and(eq(sessionParticipants.sessionId, sessionId), eq(sessionParticipants.profileId, profileId))).limit(1);
+  if (!existing[0]) await db.insert(sessionParticipants).values({ sessionId, profileId });
+}
+
+export async function recordGroupSessionEvent(input: { sessionId: string; profileId: number; telegramUserId: string; eventType: "join" | "message" | "question" | "answer" | "system"; content: string; eventKey?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  try { await db.insert(groupSessionEvents).values(input); return true; } catch { return false; }
 }
 
 export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string }) {
