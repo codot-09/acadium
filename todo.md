@@ -37,3 +37,13 @@
 - [x] API authorization va conversation ownership tekshiruvlarini production-ready qilish.
 - [x] Telegram preview/demo holatida database’ga noto‘g‘ri yoki seed ma’lumot yozilmasligini ta’minlash.
 - [x] Production build, vitest va desktop/mobile visual QA o‘tkazish.
+- [x] Student chat rejimini nofaol qilib, teacher-first navigation va UI holatini yaratish.
+- [x] Analyze menyusini real teacher/student/material/session/submission database ma’lumotlari bilan backendda hisoblash.
+- [x] Analyze menyusida sodda til, KPI kartalar va CSS grafikalarni ko‘rsatish.
+- [x] Desktop va mobile layoutlarda sidebar, header, analytics cards va chartlarni responsiv qilish.
+- [x] Analytics authorization, TypeScript, Vitest, production build va visual QA tekshiruvlarini bajarish.
+- [x] Teacher chat history uchun owner-only conversation delete API va UI tugmasini qo‘shish.
+- [x] Delete qilinganda selected chat, message thread va conversation list cache’ini to‘g‘ri yangilash.
+- [x] Sidebar menyulari fixed, chat thread scrollable va composer pastga fixed/stable layout bo‘lishini ta’minlash.
+- [x] Desktop/mobile delete va fixed layout QA, TypeScript, Vitest va production buildni tekshirish.
+- [x] Delete qilinganda `chat.thread` cache’ini invalidate/remove qilib, active state’ni barqaror yangilash.

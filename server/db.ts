@@ -142,6 +142,18 @@ export async function createAssistantConversation(profileId: number, title = "Ne
   return rows[0]!;
 }
 
+export async function deleteConversationForOwner(profileId: number, conversationId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const conversation = await getConversationById(conversationId);
+  if (!conversation || conversation.ownerProfileId !== profileId) return false;
+  await db.transaction(async tx => {
+    await tx.delete(messages).where(eq(messages.conversationId, conversationId));
+    await tx.delete(conversations).where(eq(conversations.id, conversationId));
+  });
+  return true;
+}
+
 export async function getUserConversations(profileId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -168,6 +180,29 @@ export async function saveMessage(conversationId: string, sender: "user" | "assi
   await db.insert(messages).values({ id, conversationId, sender, content });
   const rows = await db.select().from(messages).where(eq(messages.id, id)).limit(1);
   return rows[0]!;
+}
+
+export async function getTeacherAnalytics(profileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [links, materials, sessions, assignmentsForTeacher] = await Promise.all([
+    db.select().from(teacherStudentLinks).where(eq(teacherStudentLinks.teacherProfileId, profileId)),
+    db.select({ id: aiMaterials.id, createdAt: aiMaterials.createdAt }).from(aiMaterials).where(eq(aiMaterials.teacherProfileId, profileId)),
+    db.select({ id: groupSessions.id, status: groupSessions.status, createdAt: groupSessions.createdAt }).from(groupSessions).where(eq(groupSessions.teacherProfileId, profileId)),
+    db.select({ id: assignments.id, status: assignments.status, createdAt: assignments.createdAt }).from(assignments).where(eq(assignments.teacherProfileId, profileId)),
+  ]);
+  const assignmentIds = assignmentsForTeacher.map(item => item.id);
+  const submissionsForTeacher = assignmentIds.length ? await db.select().from(submissions).where(inArray(submissions.assignmentId, assignmentIds)) : [];
+  const reviewed = submissionsForTeacher.filter(item => item.status === "reviewed").length;
+  const activityMap = new Map<string, { label: string; materials: number; sessions: number; assignments: number }>();
+  for (let index = 6; index >= 0; index -= 1) {
+    const date = new Date(); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() - index);
+    const key = date.toISOString().slice(0, 10);
+    activityMap.set(key, { label: date.toLocaleDateString("en-US", { weekday: "short" }), materials: 0, sessions: 0, assignments: 0 });
+  }
+  const increment = (date: Date, field: "materials" | "sessions" | "assignments") => { const item = activityMap.get(new Date(date).toISOString().slice(0, 10)); if (item) item[field] += 1; };
+  materials.forEach(item => increment(item.createdAt, "materials")); sessions.forEach(item => increment(item.createdAt, "sessions")); assignmentsForTeacher.forEach(item => increment(item.createdAt, "assignments"));
+  return { students: links.length, materials: materials.length, sessions: sessions.length, assignments: assignmentsForTeacher.length, submissions: submissionsForTeacher.length, reviewedSubmissions: reviewed, reviewRate: submissionsForTeacher.length ? Math.round((reviewed / submissionsForTeacher.length) * 100) : 0, activity: Array.from(activityMap.values()) };
 }
 
 export async function getTeacherDashboard(profileId: number) {

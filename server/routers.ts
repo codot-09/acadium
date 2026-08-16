@@ -14,10 +14,12 @@ import {
   getConversationMessages,
   getConversationById,
   createAssistantConversation,
+  deleteConversationForOwner,
   getOrCreateAssistantConversation,
   getUserConversations,
   getStudentDashboard,
   getStudentSubmissionsForTeacher,
+  getTeacherAnalytics,
   getTeacherDashboard,
   getTelegramProfileById,
   saveMessage,
@@ -86,6 +88,11 @@ export const appRouter = router({
       ]);
       return { profile, conversation, history, dashboard };
     }),
+    analytics: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      if (profile.role !== "teacher") throw new TRPCError({ code: "FORBIDDEN", message: "Teacher analytics access is required" });
+      return getTeacherAnalytics(profile.id);
+    }),
   }),
   chat: router({
     conversations: publicProcedure.input(telegramInput).query(async ({ input }) => {
@@ -95,6 +102,12 @@ export const appRouter = router({
     newConversation: publicProcedure.input(telegramInput.extend({ title: z.string().trim().min(1).max(120).optional() })).mutation(async ({ input }) => {
       const profile = await getTelegramProfile(input.initData);
       return createAssistantConversation(profile.id, input.title ?? "New chat");
+    }),
+    deleteConversation: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const deleted = await deleteConversationForOwner(profile.id, input.conversationId);
+      if (!deleted) throw new TRPCError({ code: "FORBIDDEN", message: "Conversation access denied" });
+      return { success: true as const, conversationId: input.conversationId };
     }),
     history: publicProcedure.input(telegramInput).query(async ({ input }) => {
       const profile = await getTelegramProfile(input.initData);
