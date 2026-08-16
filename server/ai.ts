@@ -7,16 +7,36 @@ export type GroupResponseAnalysis = { classification: "answer" | "question" | "o
 const groupLessonBriefSchema = { type: "object", properties: { title: { type: "string" }, overview: { type: "string" }, objectives: { type: "array", items: { type: "string" } }, keyPoints: { type: "array", items: { type: "string" } }, resources: { type: "array", items: { type: "object", properties: { title: { type: "string" }, summary: { type: "string" }, searchQuery: { type: "string" } }, required: ["title", "summary", "searchQuery"], additionalProperties: false } }, firstQuestion: { type: "string" } }, required: ["title", "overview", "objectives", "keyPoints", "resources", "firstQuestion"], additionalProperties: false };
 const groupResponseAnalysisSchema = { type: "object", properties: { classification: { type: "string", enum: ["answer", "question", "off_topic"] }, reply: { type: "string" }, confidence: { type: "number" }, needsTeacher: { type: "boolean" }, suggestedNextStep: { type: "string" } }, required: ["classification", "reply", "confidence", "needsTeacher", "suggestedNextStep"], additionalProperties: false };
 
-export async function generateGroupLessonBrief(topic: string): Promise<GroupLessonBrief> {
-  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 1800, messages: [
-    { role: "system", content: "You are Acadium, an online teacher for a Telegram class. Respond in Uzbek. Create a concise, age-neutral lesson starter. Do not invent direct URLs; provide safe resource search queries instead. Make the group ready to discuss." },
-    { role: "user", content: `Create a group lesson brief for this topic: ${topic}` },
-  ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_lesson_brief", strict: true, schema: groupLessonBriefSchema } } });
-  const raw = result.choices[0]?.message.content;
+function fallbackGroupLessonBrief(topic: string): GroupLessonBrief {
+  const cleanTopic = topic.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ").slice(0, 120) || "Umumiy mavzu";
+  return {
+    title: cleanTopic.charAt(0).toUpperCase() + cleanTopic.slice(1),
+    overview: `Bugungi online lesson mavzusi: ${cleanTopic}. Avval asosiy tushunchalarni aniqlaymiz, keyin misol va kichik amaliy topshiriq orqali mustahkamlaymiz.`,
+    objectives: [`${cleanTopic} bo‘yicha asosiy tushunchalarni izohlash`, "Mavzuni oddiy misol bilan tushuntirish", "Savol-javob orqali tushunishni tekshirish"],
+    keyPoints: ["Asosiy atamalar va ularning ma’nosi", "Mavzuning real hayotdagi qo‘llanilishi", "O‘quvchi javobini dalil yoki misol bilan asoslash"],
+    resources: [{ title: "Qidiruv uchun yo‘nalish", summary: "Mavzu bo‘yicha ishonchli darslik, ensiklopediya yoki maktab manbasini tanlang.", searchQuery: cleanTopic }],
+    firstQuestion: `${cleanTopic} haqida bilgan eng muhim fikringiz nima? Misol bilan yozing.`,
+  };
+}
+
+function parseGroupLessonBrief(raw: unknown): GroupLessonBrief {
   if (typeof raw !== "string") throw new Error("Group lesson brief response is empty");
   const parsed = JSON.parse(raw) as GroupLessonBrief;
   if (!parsed.title || !parsed.overview || !parsed.firstQuestion || !Array.isArray(parsed.objectives) || !Array.isArray(parsed.keyPoints) || !Array.isArray(parsed.resources)) throw new Error("Group lesson brief is incomplete");
   return parsed;
+}
+
+export async function generateGroupLessonBrief(topic: string): Promise<GroupLessonBrief> {
+  try {
+    const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 2400, messages: [
+      { role: "system", content: "You are Acadium, an online teacher for a Telegram class. Respond in Uzbek. Return compact valid JSON matching the schema. Create a concise, age-neutral lesson starter. Do not invent direct URLs; provide safe resource search queries instead. Make the group ready to discuss." },
+      { role: "user", content: `Create a compact group lesson brief for this topic: ${topic.trim().slice(0, 160)}` },
+    ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_lesson_brief", strict: true, schema: groupLessonBriefSchema } } });
+    return parseGroupLessonBrief(result.choices[0]?.message.content);
+  } catch (error) {
+    console.error("[AI] Group lesson brief failed; using safe starter fallback", error);
+    return fallbackGroupLessonBrief(topic);
+  }
 }
 
 export async function analyzeGroupMessage(topic: string, brief: GroupLessonBrief | null, message: string): Promise<GroupResponseAnalysis> {

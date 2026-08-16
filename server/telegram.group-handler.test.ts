@@ -47,6 +47,14 @@ describe("Telegram group lesson handler", () => {
     expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalled();
   });
 
+  it("starts a session and sends the intro when the AI layer returns a fallback brief", async () => {
+    aiMocks.generateGroupLessonBrief.mockResolvedValueOnce({ title: "Fotosintez 8 sinf", overview: "Safe starter", objectives: ["Understand"], keyPoints: ["Key point"], resources: [{ title: "Search", summary: "Use a trusted textbook", searchQuery: "fotosintez 8 sinf" }], firstQuestion: "Fotosintez nima?" });
+    await handleTelegramUpdate({ update_id: 109, message: { chat: { id: -101, type: "supergroup", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/lesson fotosintez-8-sinf" } });
+    expect(dbMocks.createGroupSession).toHaveBeenCalledWith(expect.objectContaining({ title: "Fotosintez 8 sinf", topic: "fotosintez-8-sinf" }));
+    expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining("lesson_brief") }));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("Fotosintez nima?") }));
+  });
+
   it("rejects a non-admin teacher command", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => url.includes("sendMessage") ? new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 }) : new Response(JSON.stringify({ ok: true, result: { status: "member" } }), { status: 200 })));
     await handleTelegramUpdate({ update_id: 102, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Student" }, text: "/lesson biology" } });

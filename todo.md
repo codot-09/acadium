@@ -82,3 +82,9 @@
 - [x] Rate limitdan oshganda AI call skip bo‘lishi va fallback group reply qaytishi uchun handler integration test yozish.
 - [x] AI chat/material generation failure sababini topish va production-safe tuzatish.
 - [x] AI request path uchun regression test yozish va previewda chat oqimini tekshirish.
+- [x] Telegram `/lesson` AI generation failure sababini topish va resilient lesson brief fallbackini joriy qilish.
+- [x] `/lesson` handleri uchun AI structured output, fallback va session start regression testlarini qo‘shish.
+- [x] Real Telegram webhook konfiguratsiyasi va group lesson smoke verificationini bajarish.
+- [x] `/lesson` handler fallback brief bilan session yaratishi, event saqlashi va intro yuborishini alohida regression testda tasdiqlash.
+- [x] Production webhook `getWebhookInfo` va haqiqiy `/lesson` update oqimini smoke verify qilish.
+- [x] Production-parity signed webhook replay testi orqali `/lesson` update → handler → session/event/sendMessage oqimini tasdiqlash.
