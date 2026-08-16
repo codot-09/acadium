@@ -88,3 +88,16 @@
 - [x] `/lesson` handler fallback brief bilan session yaratishi, event saqlashi va intro yuborishini alohida regression testda tasdiqlash.
 - [x] Production webhook `getWebhookInfo` va haqiqiy `/lesson` update oqimini smoke verify qilish.
 - [x] Production-parity signed webhook replay testi orqali `/lesson` update → handler → session/event/sendMessage oqimini tasdiqlash.
+- [x] Telegram reply xabarlarida asl lesson message contextini olib, AI analysisni production-safe ishlatish va fallbackni faqat haqiqiy xatoda ko‘rsatish.
+- [x] Student profile/group membership persistence oqimini audit qilish va har bir lesson interactionda studentni database’da barqaror saqlash.
+- [x] Web Appni group-first modelga o‘tkazish: teacher uchun lesson session history, session detail, analytics va group conversation ko‘rinishlari.
+- [x] Web Appda yangi dars generate qilish UI oqimini olib tashlash yoki faqat group session historyga yo‘naltirish.
+- [x] Reply analysis, student persistence va session-history UI uchun regression/integration testlar qo‘shish.
+- [x] Teacher senderini student enrollmentdan chiqarib, faqat haqiqiy student interactionlarida teacher-student link yaratish.
+- [x] Ikki xil student webhook reply update replayida alohida profile, group member va session participant persistenceini tasdiqlash.
+- [x] Web App session history/detail UI uchun session tanlash, detail fetch, event timeline va empty state regression testlarini qo‘shish.
+- [x] Kamida ikki session bilan boshqa session tanlanganda `sessionDetail` selected session ID bilan yangilanishini component testda tasdiqlash.
+- [x] Session detail loading yoki empty branchi uchun production-safe UI regression test qo‘shish.
+- [x] `teacher.sessionDetail` loading yoki undefined holatida Home componentda explicit loading/empty state ko‘rsatish.
+- [x] Session detail loading/missing branchi uchun Home component regression testlarini qo‘shish.
+- [x] Tanlangan session mavjud bo‘lganda `sessionDetail` undefined va `isLoading=false` holatida placeholder panel render bo‘lishini testlash.

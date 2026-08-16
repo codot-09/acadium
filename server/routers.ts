@@ -21,6 +21,7 @@ import {
   getStudentSubmissionsForTeacher,
   getTeacherAnalytics,
   getTeacherDashboard,
+  getTeacherGroupSessionDetail,
   getTelegramProfileById,
   saveMessage,
   setTelegramProfileRole,
@@ -170,6 +171,10 @@ export const appRouter = router({
     startGroupSession: publicProcedure.input(telegramInput.extend({ telegramGroupId: z.string().min(1), groupTitle: z.string().min(1), title: z.string().min(3), topic: z.string().min(3) })).mutation(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);
       return createGroupSession({ teacherProfileId: teacher.id, telegramGroupId: input.telegramGroupId, groupTitle: input.groupTitle, title: input.title, topic: input.topic });
+    }),
+    sessionDetail: publicProcedure.input(telegramInput.extend({ sessionId: z.string().min(1) })).query(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return getTeacherGroupSessionDetail(teacher.id, input.sessionId);
     }),
     studentResults: publicProcedure.input(telegramInput.extend({ studentProfileId: z.number().int().positive() })).query(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);

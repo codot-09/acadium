@@ -8,6 +8,7 @@ export type TelegramUpdate = {
     from?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string };
     text?: string;
     message_id?: number;
+    reply_to_message?: { message_id?: number; text?: string; from?: { id?: number; first_name?: string; username?: string } };
   };
   chat_member?: { chat?: { id?: number; type?: string; title?: string }; from?: { id?: number }; new_chat_member?: { status?: string; user?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } } };
 };
@@ -135,10 +136,14 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     return;
   }
 
-  await ensureSessionParticipant(active.id, profile.id);
-  await ensureTeacherStudentLink(active.teacherProfileId, profile.id);
+  const senderIsAdmin = await isTelegramGroupAdmin(chat.id, from.id);
+  if (!senderIsAdmin) {
+    await upsertTelegramGroupMember({ telegramGroupId: String(chat.id), profileId: profile.id, status: "member" });
+    await ensureSessionParticipant(active.id, profile.id);
+    await ensureTeacherStudentLink(active.teacherProfileId, profile.id);
+  }
   if (command?.command === "endlesson") {
-    if (!(await isTelegramGroupAdmin(chat.id, from.id))) { await sendTelegramMessage(chat.id, "Faqat lessonni boshlagan teacher yoki guruh administratori lessonni tugata oladi."); return; }
+    if (!senderIsAdmin) { await sendTelegramMessage(chat.id, "Faqat lessonni boshlagan teacher yoki guruh administratori lessonni tugata oladi."); return; }
     await updateGroupSessionStatus(active.id, "ended");
     await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "system", content: "Lesson ended", eventKey: `update:${update.update_id ?? "unknown"}:endlesson` });
     const summary = await getGroupSessionSummary(active.id);
@@ -146,14 +151,13 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     return;
   }
   if (command?.command === "ask") {
-    if (!(await isTelegramGroupAdmin(chat.id, from.id))) { await sendTelegramMessage(chat.id, "Savol yuborish uchun teacher guruh administratori bo‘lishi kerak."); return; }
+    if (!senderIsAdmin) { await sendTelegramMessage(chat.id, "Savol yuborish uchun teacher guruh administratori bo‘lishi kerak."); return; }
     if (!command.argument) { await sendTelegramMessage(chat.id, "Format: <code>/ask Fotosintezning asosiy bosqichi nima?</code>"); return; }
     await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "question", content: command.argument, eventKey: `update:${update.update_id ?? "unknown"}:ask` });
     await sendTelegramMessage(chat.id, `<b>Teacher savoli:</b>\n\n${command.argument}\n\nJavobingizni shu guruhda yozing.`);
     return;
   }
   if (text && !text.startsWith("/")) {
-    const senderIsAdmin = await isTelegramGroupAdmin(chat.id, from.id);
     if (senderIsAdmin) {
       await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "message", content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, replyToMessageId: message.message_id ? String(message.message_id) : undefined });
       return;
@@ -161,10 +165,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     const allowed = await consumeTelegramGroupAnalysisRateLimit(`group:${chat.id}:profile:${profile.id}`, 8, 60_000);
     if (!allowed) { await sendTelegramMessage(chat.id, "Acadium hozir juda ko‘p javoblarni tahlil qilmoqda. Iltimos, bir daqiqa kutib qayta yozing.", message.message_id); return; }
     const brief = parseLessonBrief(active.lessonBriefJson);
+    const replyContext = message.reply_to_message?.text ? `Original Telegram lesson message:\n${message.reply_to_message.text}` : undefined;
+    const referencedMessageId = message.reply_to_message?.message_id ?? message.message_id;
     let analysis;
-    try { analysis = await analyzeGroupMessage(active.topic, brief, text); } catch (error) { console.error("[Telegram lesson] Student analysis failed:", error); await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "answer", content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, replyToMessageId: message.message_id ? String(message.message_id) : undefined }); await sendTelegramMessage(chat.id, "Javobingiz qabul qilindi. Acadium tahlilini yakunlay olmadi; teacher keyinroq ko‘rib chiqadi.", message.message_id); return; }
+    try { analysis = replyContext ? await analyzeGroupMessage(active.topic, brief, text, replyContext) : await analyzeGroupMessage(active.topic, brief, text); } catch (error) { console.error("[Telegram lesson] Student analysis failed:", error); await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "answer", content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, replyToMessageId: referencedMessageId ? String(referencedMessageId) : undefined }); await sendTelegramMessage(chat.id, "Javobingiz qabul qilindi. Acadium tahlilini yakunlay olmadi; teacher keyinroq ko‘rib chiqadi.", message.message_id); return; }
     const eventType = analysis.classification === "question" ? "question" : "answer";
-    await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType, content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, analysisJson: JSON.stringify(analysis), replyToMessageId: message.message_id ? String(message.message_id) : undefined });
+    await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType, content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, analysisJson: JSON.stringify({ ...analysis, replyContext }), replyToMessageId: referencedMessageId ? String(referencedMessageId) : undefined });
     const teacherNote = analysis.needsTeacher ? "\n\n<i>Teacher uchun: bu javob shaxsiy follow-up talab qilishi mumkin.</i>" : "";
     await sendTelegramMessage(chat.id, `<b>Acadium tahlili</b>\n\n${escapeTelegramHtml(analysis.reply)}\n\n<i>Keyingi qadam: ${escapeTelegramHtml(analysis.suggestedNextStep)}</i>${teacherNote}`, message.message_id);
   }

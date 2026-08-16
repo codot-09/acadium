@@ -4,6 +4,12 @@ export type GeneratedMaterial = { title: string; lessonPlan: string; quiz: strin
 export type GroupLessonBrief = { title: string; overview: string; objectives: string[]; keyPoints: string[]; resources: Array<{ title: string; summary: string; searchQuery: string }>; firstQuestion: string };
 export type GroupResponseAnalysis = { classification: "answer" | "question" | "off_topic"; reply: string; confidence: number; needsTeacher: boolean; suggestedNextStep: string };
 
+function contentToText(content: unknown) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map(part => typeof part === "object" && part && "text" in part && typeof part.text === "string" ? part.text : "").join("");
+  return "";
+}
+
 const groupLessonBriefSchema = { type: "object", properties: { title: { type: "string" }, overview: { type: "string" }, objectives: { type: "array", items: { type: "string" } }, keyPoints: { type: "array", items: { type: "string" } }, resources: { type: "array", items: { type: "object", properties: { title: { type: "string" }, summary: { type: "string" }, searchQuery: { type: "string" } }, required: ["title", "summary", "searchQuery"], additionalProperties: false } }, firstQuestion: { type: "string" } }, required: ["title", "overview", "objectives", "keyPoints", "resources", "firstQuestion"], additionalProperties: false };
 const groupResponseAnalysisSchema = { type: "object", properties: { classification: { type: "string", enum: ["answer", "question", "off_topic"] }, reply: { type: "string" }, confidence: { type: "number" }, needsTeacher: { type: "boolean" }, suggestedNextStep: { type: "string" } }, required: ["classification", "reply", "confidence", "needsTeacher", "suggestedNextStep"], additionalProperties: false };
 
@@ -39,16 +45,26 @@ export async function generateGroupLessonBrief(topic: string): Promise<GroupLess
   }
 }
 
-export async function analyzeGroupMessage(topic: string, brief: GroupLessonBrief | null, message: string): Promise<GroupResponseAnalysis> {
-  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 900, messages: [
-    { role: "system", content: "You are Acadium, a calm online teacher assistant inside a Telegram group. Respond in Uzbek. Analyze the student message against the lesson topic. If it is a question, answer clearly. If it is an answer, give concise feedback and one next step. Never shame a student. Set needsTeacher true only when the teacher should personally follow up." },
-    { role: "user", content: JSON.stringify({ topic, lesson: brief, studentMessage: message }) },
-  ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_response_analysis", strict: true, schema: groupResponseAnalysisSchema } } });
-  const raw = result.choices[0]?.message.content;
-  if (typeof raw !== "string") throw new Error("Group response analysis is empty");
-  const parsed = JSON.parse(raw) as GroupResponseAnalysis;
-  if (!parsed.reply || !parsed.classification || typeof parsed.confidence !== "number") throw new Error("Group response analysis is incomplete");
-  return { ...parsed, confidence: Math.max(0, Math.min(1, parsed.confidence)) };
+function fallbackGroupResponseAnalysis(message: string, replyContext?: string): GroupResponseAnalysis {
+  const isQuestion = message.trim().endsWith("?") || /^(nima|nega|qanday|qachon|kim|where|why|how|what)\b/i.test(message.trim());
+  return { classification: isQuestion ? "question" : "answer", reply: replyContext ? "Reply qilingan Acadium dars xabari kontekstida javobingiz qabul qilindi. Asosiy fikringizni yana bir misol yoki dalil bilan mustahkamlang." : "Javobingiz qabul qilindi. Asosiy fikringizni yana bir misol yoki dalil bilan mustahkamlang.", confidence: 0.35, needsTeacher: true, suggestedNextStep: "Javobni misol bilan kengaytiring; teacher Analyze menyusida ko‘rib chiqishi mumkin." };
+}
+
+export async function analyzeGroupMessage(topic: string, brief: GroupLessonBrief | null, message: string, replyContext?: string): Promise<GroupResponseAnalysis> {
+  try {
+    const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 1200, messages: [
+      { role: "system", content: "You are Acadium, a calm online teacher assistant inside a Telegram group. Respond in Uzbek. Analyze the student message against the lesson topic and the quoted Telegram message when provided. If it is a question, answer clearly. If it is an answer, give concise feedback and one next step. Never shame a student. Set needsTeacher true only when the teacher should personally follow up." },
+      { role: "user", content: JSON.stringify({ topic, lesson: brief, quotedTelegramMessage: replyContext?.slice(0, 4000) ?? null, studentMessage: message }) },
+    ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_response_analysis", strict: true, schema: groupResponseAnalysisSchema } } });
+    const raw = contentToText(result.choices[0]?.message.content);
+    if (!raw) throw new Error("Group response analysis is empty");
+    const parsed = JSON.parse(raw) as GroupResponseAnalysis;
+    if (!parsed.reply || !parsed.classification || typeof parsed.confidence !== "number") throw new Error("Group response analysis is incomplete");
+    return { ...parsed, confidence: Math.max(0, Math.min(1, parsed.confidence)) };
+  } catch (error) {
+    console.error("[AI] Group response analysis failed; using safe response", error);
+    return fallbackGroupResponseAnalysis(message, replyContext);
+  }
 }
 
 const materialSchema = {

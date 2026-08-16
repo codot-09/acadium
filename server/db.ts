@@ -231,6 +231,18 @@ export async function getTeacherAnalytics(profileId: number) {
   return { students: links.length, materials: materials.length, sessions: sessions.length, assignments: assignmentsForTeacher.length, submissions: submissionsForTeacher.length, reviewedSubmissions: reviewed, reviewRate: submissionsForTeacher.length ? Math.round((reviewed / submissionsForTeacher.length) * 100) : 0, groupStudents: uniqueGroupStudents.size, groupMessages: sessionEvents.filter(item => item.eventType === "message" || item.eventType === "answer").length, groupAnswers, groupStudentBreakdown, sessionAnalytics, activity: Array.from(activityMap.values()) };
 }
 
+export async function getTeacherGroupSessionDetail(teacherProfileId: number, sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [sessionRows, participantRows, eventRows] = await Promise.all([
+    db.select().from(groupSessions).where(and(eq(groupSessions.id, sessionId), eq(groupSessions.teacherProfileId, teacherProfileId))).limit(1),
+    db.select({ participant: sessionParticipants, profile: telegramProfiles }).from(sessionParticipants).innerJoin(telegramProfiles, eq(sessionParticipants.profileId, telegramProfiles.id)).where(eq(sessionParticipants.sessionId, sessionId)),
+    db.select({ event: groupSessionEvents, profile: telegramProfiles }).from(groupSessionEvents).innerJoin(telegramProfiles, eq(groupSessionEvents.profileId, telegramProfiles.id)).where(eq(groupSessionEvents.sessionId, sessionId)).orderBy(groupSessionEvents.createdAt),
+  ]);
+  if (!sessionRows[0]) return null;
+  return { session: sessionRows[0], participants: participantRows, events: eventRows };
+}
+
 export async function getTeacherDashboard(profileId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");

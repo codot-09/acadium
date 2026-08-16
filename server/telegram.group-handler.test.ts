@@ -85,6 +85,18 @@ describe("Telegram group lesson handler", () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("juda ko‘p") }));
   });
 
+  it("analyzes a student reply with the quoted lesson context and persists the student enrollment", async () => {
+    dbMocks.upsertTelegramProfile.mockResolvedValue({ id: 11 });
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10, topic: "biology", lessonBriefJson: JSON.stringify({ title: "Biology", overview: "Overview", objectives: [], keyPoints: [], resources: [], firstQuestion: "Question" }) });
+    await handleTelegramUpdate({ update_id: 110, message: { message_id: 46, chat: { id: -100, type: "group", title: "Class" }, from: { id: 8, first_name: "Student" }, text: "Fotosintez bargda bo‘ladi", reply_to_message: { message_id: 40, text: "<b>Acadium online lesson: Fotosintez</b>\nBirinchi savol: Fotosintez nima?" } } });
+    expect(dbMocks.upsertTelegramProfile).toHaveBeenCalledWith(expect.objectContaining({ telegramId: "8", firstName: "Student" }));
+    expect(dbMocks.upsertTelegramGroupMember).toHaveBeenCalledWith({ telegramGroupId: "-100", profileId: 11, status: "member" });
+    expect(dbMocks.ensureSessionParticipant).toHaveBeenCalledWith("session-1", 11);
+    expect(dbMocks.ensureTeacherStudentLink).toHaveBeenCalledWith(10, 11);
+    expect(aiMocks.analyzeGroupMessage).toHaveBeenCalledWith("biology", expect.any(Object), "Fotosintez bargda bo‘ladi", expect.stringContaining("Fotosintez nima?"));
+    expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalledWith(expect.objectContaining({ profileId: 11, eventType: "answer", replyToMessageId: "40" }));
+  });
+
   it("records a teacher question with /ask", async () => {
     dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10 });
     await handleTelegramUpdate({ update_id: 105, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/ask Explain photosynthesis" } });
