@@ -76,7 +76,7 @@ function formatGroupLessonBrief(brief: GroupLessonBrief) {
 function parseLessonBrief(value: string | null | undefined): GroupLessonBrief | null { if (!value) return null; try { return JSON.parse(value) as GroupLessonBrief; } catch { return null; } }
 
 export function parseGroupCommand(text: string) {
-  const match = text.match(/^\/(lesson|ask|endlesson)(?:@[^\s]+)?(?:\s+([\s\S]+))?$/i);
+  const match = text.match(/^\/(lesson|ask|endlesson|pause|resume|status|help)(?:@[^\s]+)?(?:\s+([\s\S]+))?$/i);
   return match ? { command: match[1].toLowerCase(), argument: match[2]?.trim() ?? "" } : null;
 }
 
@@ -137,6 +137,26 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   const senderIsAdmin = await isTelegramGroupAdmin(chat.id, from.id);
+  if (command?.command === "help") {
+    await sendTelegramMessage(chat.id, "<b>Acadium group commands</b>\n\n<code>/lesson topic</code> — start lesson\n<code>/ask question</code> — teacher question\n<code>/pause</code> — pause analysis\n<code>/resume</code> — resume analysis\n<code>/status</code> — show session status\n<code>/endlesson</code> — finish lesson");
+    return;
+  }
+  if (command?.command === "status") {
+    await sendTelegramMessage(chat.id, `<b>Lesson status:</b> ${active.status}\n\nTopic: ${escapeTelegramHtml(active.topic)}\nGroup: ${escapeTelegramHtml(active.groupTitle)}`);
+    return;
+  }
+  if (command?.command === "pause" || command?.command === "resume") {
+    if (!senderIsAdmin) { await sendTelegramMessage(chat.id, "Faqat group administrator sessionni pause yoki resume qila oladi."); return; }
+    const status = command.command === "pause" ? "paused" : "live";
+    await updateGroupSessionStatus(active.id, status);
+    await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "system", content: status === "paused" ? "Lesson paused" : "Lesson resumed", eventKey: `update:${update.update_id ?? "unknown"}:${command.command}` });
+    await sendTelegramMessage(chat.id, status === "paused" ? "<b>Lesson paused.</b> Student replies saqlanadi, AI analysis vaqtincha to‘xtatildi." : "<b>Lesson resumed.</b> Student replies yana AI orqali tahlil qilinadi.");
+    return;
+  }
+  if (active.status === "paused" && !senderIsAdmin) {
+    await sendTelegramMessage(chat.id, "Lesson hozircha paused. Teacher /resume yuborgandan keyin javob yuboring.", message.message_id);
+    return;
+  }
   if (!senderIsAdmin) {
     await upsertTelegramGroupMember({ telegramGroupId: String(chat.id), profileId: profile.id, status: "member" });
     await ensureSessionParticipant(active.id, profile.id);

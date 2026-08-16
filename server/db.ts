@@ -231,6 +231,22 @@ export async function getTeacherAnalytics(profileId: number) {
   return { students: links.length, materials: materials.length, sessions: sessions.length, assignments: assignmentsForTeacher.length, submissions: submissionsForTeacher.length, reviewedSubmissions: reviewed, reviewRate: submissionsForTeacher.length ? Math.round((reviewed / submissionsForTeacher.length) * 100) : 0, groupStudents: uniqueGroupStudents.size, groupMessages: sessionEvents.filter(item => item.eventType === "message" || item.eventType === "answer").length, groupAnswers, groupStudentBreakdown, sessionAnalytics, activity: Array.from(activityMap.values()) };
 }
 
+export async function getTeacherGroupSessions(teacherProfileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(groupSessions).where(eq(groupSessions.teacherProfileId, teacherProfileId)).orderBy(desc(groupSessions.createdAt));
+}
+
+export async function updateTeacherGroupSessionStatus(teacherProfileId: number, sessionId: string, status: "live" | "paused" | "ended") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const rows = await db.select({ id: groupSessions.id }).from(groupSessions).where(and(eq(groupSessions.id, sessionId), eq(groupSessions.teacherProfileId, teacherProfileId))).limit(1);
+  if (!rows[0]) return null;
+  const now = new Date();
+  await db.update(groupSessions).set({ status, ...(status === "live" ? { startedAt: now, endedAt: null } : status === "ended" ? { endedAt: now } : {}) }).where(eq(groupSessions.id, sessionId));
+  return db.select().from(groupSessions).where(eq(groupSessions.id, sessionId)).limit(1).then(result => result[0] ?? null);
+}
+
 export async function getTeacherGroupSessionDetail(teacherProfileId: number, sessionId: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
@@ -296,7 +312,7 @@ export async function createAssignment(input: { teacherProfileId: number; studen
 export async function getActiveGroupSession(telegramGroupId: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  const rows = await db.select().from(groupSessions).where(and(eq(groupSessions.telegramGroupId, telegramGroupId), eq(groupSessions.status, "live"))).orderBy(desc(groupSessions.createdAt)).limit(1);
+  const rows = await db.select().from(groupSessions).where(and(eq(groupSessions.telegramGroupId, telegramGroupId), inArray(groupSessions.status, ["live", "paused"]))).orderBy(desc(groupSessions.createdAt)).limit(1);
   return rows[0];
 }
 
@@ -337,7 +353,7 @@ export async function upsertTelegramGroupMember(input: { telegramGroupId: string
   await db.insert(telegramGroupMembers).values(input);
 }
 
-export async function updateGroupSessionStatus(sessionId: string, status: "planned" | "live" | "ended") {
+export async function updateGroupSessionStatus(sessionId: string, status: "planned" | "live" | "paused" | "ended") {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   await db.update(groupSessions).set({ status, endedAt: status === "ended" ? new Date() : undefined }).where(eq(groupSessions.id, sessionId));

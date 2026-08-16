@@ -12,6 +12,13 @@ describe("Telegram group lesson commands", () => {
     expect(parseGroupCommand("/endlesson")).toEqual({ command: "endlesson", argument: "" });
   });
 
+  it("parses session management and help commands", () => {
+    expect(parseGroupCommand("/pause")).toEqual({ command: "pause", argument: "" });
+    expect(parseGroupCommand("/resume")).toEqual({ command: "resume", argument: "" });
+    expect(parseGroupCommand("/status")).toEqual({ command: "status", argument: "" });
+    expect(parseGroupCommand("/help")).toEqual({ command: "help", argument: "" });
+  });
+
   it("ignores ordinary text and unsupported commands", () => {
     expect(parseGroupCommand("hello class")).toBeNull();
     expect(parseGroupCommand("/unknown topic")).toBeNull();

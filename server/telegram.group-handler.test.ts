@@ -97,6 +97,28 @@ describe("Telegram group lesson handler", () => {
     expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalledWith(expect.objectContaining({ profileId: 11, eventType: "answer", replyToMessageId: "40" }));
   });
 
+  it("pauses and resumes an active lesson from teacher commands", async () => {
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10, status: "live", topic: "biology", groupTitle: "Class" });
+    await handleTelegramUpdate({ update_id: 111, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/pause" } });
+    expect(dbMocks.updateGroupSessionStatus).toHaveBeenCalledWith("session-1", "paused");
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10, status: "paused", topic: "biology", groupTitle: "Class" });
+    await handleTelegramUpdate({ update_id: 112, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/resume" } });
+    expect(dbMocks.updateGroupSessionStatus).toHaveBeenCalledWith("session-1", "live");
+  });
+
+  it("does not analyze student replies while a lesson is paused", async () => {
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10, status: "paused", topic: "biology", groupTitle: "Class" });
+    await handleTelegramUpdate({ update_id: 113, message: { message_id: 50, chat: { id: -100, type: "group", title: "Class" }, from: { id: 8, first_name: "Student" }, text: "My answer" } });
+    expect(aiMocks.analyzeGroupMessage).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("paused") }));
+  });
+
+  it("returns the current lesson status", async () => {
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10, status: "live", topic: "biology", groupTitle: "Class" });
+    await handleTelegramUpdate({ update_id: 114, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 8, first_name: "Student" }, text: "/status" } });
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("Lesson status") }));
+  });
+
   it("records a teacher question with /ask", async () => {
     dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-1", teacherProfileId: 10 });
     await handleTelegramUpdate({ update_id: 105, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/ask Explain photosynthesis" } });

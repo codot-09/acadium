@@ -101,3 +101,15 @@
 - [x] `teacher.sessionDetail` loading yoki undefined holatida Home componentda explicit loading/empty state ko‘rsatish.
 - [x] Session detail loading/missing branchi uchun Home component regression testlarini qo‘shish.
 - [x] Tanlangan session mavjud bo‘lganda `sessionDetail` undefined va `isLoading=false` holatida placeholder panel render bo‘lishini testlash.
+- [x] Teacher Web App’da real group lesson sessionlarining ko‘rinmasligi sababini tuzatish va session history queryni ishonchli qilish.
+- [x] Session history/detail uchun real-time yoki polling refresh, live status va yangi eventlarni avtomatik ko‘rsatish.
+- [x] Teacher uchun session manage controls: refresh, open detail, end/pause/resume va session status boshqaruvi.
+- [x] Teacher Web App session history/detail dizaynini yaxshilash va desktop/mobile UXni optimallashtirish.
+- [x] Telegram botga foydali session commands va teacher/student interaction funksiyalarini qo‘shish.
+- [x] Session management, realtime refresh va yangi bot funksiyalari uchun regression/integration testlar yozish.
+- [x] Home componentda authoritative `teacher.sessions` querydan session list render bo‘lishini alohida testlash.
+- [x] Refresh/polling flowda session query refetch chaqirilishini component testda tasdiqlash.
+- [x] Web App pause/resume/end status actionlari `updateSessionStatus` mutation va refetch oqimini testlash.
+- [x] `teacher.sessions` querysi analytics fallbackdan mustaqil ishlashini testlash.
+- [x] Polling/refetch interval oqimini fake timer bilan regression testlash.
+- [x] Resume va End session Web App action payloadlari hamda mutation success refetch oqimini testlash.

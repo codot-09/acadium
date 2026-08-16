@@ -22,6 +22,8 @@ import {
   getTeacherAnalytics,
   getTeacherDashboard,
   getTeacherGroupSessionDetail,
+  getTeacherGroupSessions,
+  updateTeacherGroupSessionStatus,
   getTelegramProfileById,
   saveMessage,
   setTelegramProfileRole,
@@ -172,9 +174,19 @@ export const appRouter = router({
       const teacher = await requireTeacher(input.initData);
       return createGroupSession({ teacherProfileId: teacher.id, telegramGroupId: input.telegramGroupId, groupTitle: input.groupTitle, title: input.title, topic: input.topic });
     }),
+    sessions: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return getTeacherGroupSessions(teacher.id);
+    }),
     sessionDetail: publicProcedure.input(telegramInput.extend({ sessionId: z.string().min(1) })).query(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);
       return getTeacherGroupSessionDetail(teacher.id, input.sessionId);
+    }),
+    updateSessionStatus: publicProcedure.input(telegramInput.extend({ sessionId: z.string().min(1), status: z.enum(["live", "paused", "ended"]) })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      const updated = await updateTeacherGroupSessionStatus(teacher.id, input.sessionId, input.status);
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      return updated;
     }),
     studentResults: publicProcedure.input(telegramInput.extend({ studentProfileId: z.number().int().positive() })).query(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);

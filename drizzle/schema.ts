@@ -97,7 +97,7 @@ export const groupSessions = mysqlTable("group_sessions", {
   title: varchar("title", { length: 256 }).notNull(),
   topic: text("topic").notNull(),
   lessonBriefJson: text("lessonBriefJson"),
-  status: mysqlEnum("sessionStatus", ["planned", "live", "ended"]).default("planned").notNull(),
+  status: mysqlEnum("sessionStatus", ["planned", "live", "paused", "ended"]).default("planned").notNull(),
   startedAt: timestamp("startedAt"),
   endedAt: timestamp("endedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -1,0 +1,1 @@
+ALTER TABLE `group_sessions` MODIFY COLUMN `sessionStatus` enum('planned','live','paused','ended') NOT NULL DEFAULT 'planned';
