@@ -1,6 +1,35 @@
 import { invokeLLM } from "./_core/llm";
 
 export type GeneratedMaterial = { title: string; lessonPlan: string; quiz: string; slides: Array<{ title: string; content: string; imageDescription: string }> };
+export type GroupLessonBrief = { title: string; overview: string; objectives: string[]; keyPoints: string[]; resources: Array<{ title: string; summary: string; searchQuery: string }>; firstQuestion: string };
+export type GroupResponseAnalysis = { classification: "answer" | "question" | "off_topic"; reply: string; confidence: number; needsTeacher: boolean; suggestedNextStep: string };
+
+const groupLessonBriefSchema = { type: "object", properties: { title: { type: "string" }, overview: { type: "string" }, objectives: { type: "array", items: { type: "string" } }, keyPoints: { type: "array", items: { type: "string" } }, resources: { type: "array", items: { type: "object", properties: { title: { type: "string" }, summary: { type: "string" }, searchQuery: { type: "string" } }, required: ["title", "summary", "searchQuery"], additionalProperties: false } }, firstQuestion: { type: "string" } }, required: ["title", "overview", "objectives", "keyPoints", "resources", "firstQuestion"], additionalProperties: false };
+const groupResponseAnalysisSchema = { type: "object", properties: { classification: { type: "string", enum: ["answer", "question", "off_topic"] }, reply: { type: "string" }, confidence: { type: "number" }, needsTeacher: { type: "boolean" }, suggestedNextStep: { type: "string" } }, required: ["classification", "reply", "confidence", "needsTeacher", "suggestedNextStep"], additionalProperties: false };
+
+export async function generateGroupLessonBrief(topic: string): Promise<GroupLessonBrief> {
+  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 1800, messages: [
+    { role: "system", content: "You are Acadium, an online teacher for a Telegram class. Respond in Uzbek. Create a concise, age-neutral lesson starter. Do not invent direct URLs; provide safe resource search queries instead. Make the group ready to discuss." },
+    { role: "user", content: `Create a group lesson brief for this topic: ${topic}` },
+  ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_lesson_brief", strict: true, schema: groupLessonBriefSchema } } });
+  const raw = result.choices[0]?.message.content;
+  if (typeof raw !== "string") throw new Error("Group lesson brief response is empty");
+  const parsed = JSON.parse(raw) as GroupLessonBrief;
+  if (!parsed.title || !parsed.overview || !parsed.firstQuestion || !Array.isArray(parsed.objectives) || !Array.isArray(parsed.keyPoints) || !Array.isArray(parsed.resources)) throw new Error("Group lesson brief is incomplete");
+  return parsed;
+}
+
+export async function analyzeGroupMessage(topic: string, brief: GroupLessonBrief | null, message: string): Promise<GroupResponseAnalysis> {
+  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 900, messages: [
+    { role: "system", content: "You are Acadium, a calm online teacher assistant inside a Telegram group. Respond in Uzbek. Analyze the student message against the lesson topic. If it is a question, answer clearly. If it is an answer, give concise feedback and one next step. Never shame a student. Set needsTeacher true only when the teacher should personally follow up." },
+    { role: "user", content: JSON.stringify({ topic, lesson: brief, studentMessage: message }) },
+  ], response_format: { type: "json_schema", json_schema: { name: "acadium_group_response_analysis", strict: true, schema: groupResponseAnalysisSchema } } });
+  const raw = result.choices[0]?.message.content;
+  if (typeof raw !== "string") throw new Error("Group response analysis is empty");
+  const parsed = JSON.parse(raw) as GroupResponseAnalysis;
+  if (!parsed.reply || !parsed.classification || typeof parsed.confidence !== "number") throw new Error("Group response analysis is incomplete");
+  return { ...parsed, confidence: Math.max(0, Math.min(1, parsed.confidence)) };
+}
 
 const materialSchema = {
   type: "object",

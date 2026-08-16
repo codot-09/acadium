@@ -96,6 +96,7 @@ export const groupSessions = mysqlTable("group_sessions", {
   groupTitle: varchar("groupTitle", { length: 256 }).notNull(),
   title: varchar("title", { length: 256 }).notNull(),
   topic: text("topic").notNull(),
+  lessonBriefJson: text("lessonBriefJson"),
   status: mysqlEnum("sessionStatus", ["planned", "live", "ended"]).default("planned").notNull(),
   startedAt: timestamp("startedAt"),
   endedAt: timestamp("endedAt"),
@@ -132,6 +133,13 @@ export const telegramProcessedUpdates = mysqlTable("telegram_processed_updates",
   receivedAt: timestamp("receivedAt").defaultNow().notNull(),
 });
 
+export const telegramGroupAnalysisRateLimits = mysqlTable("telegram_group_analysis_rate_limits", {
+  rateKey: varchar("rateKey", { length: 160 }).primaryKey(),
+  windowStartedAt: timestamp("windowStartedAt").notNull(),
+  requestCount: int("requestCount").notNull().default(0),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const groupSessionEvents = mysqlTable("group_session_events", {
   id: int("id").autoincrement().primaryKey(),
   sessionId: varchar("sessionId", { length: 32 }).notNull(),
@@ -140,6 +148,8 @@ export const groupSessionEvents = mysqlTable("group_session_events", {
   eventType: mysqlEnum("eventType", ["join", "message", "question", "answer", "system"]).notNull(),
   content: text("content").notNull(),
   eventKey: varchar("eventKey", { length: 128 }),
+  analysisJson: text("analysisJson"),
+  replyToMessageId: varchar("replyToMessageId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("group_events_session_idx").on(table.sessionId), index("group_events_profile_idx").on(table.profileId), uniqueIndex("group_events_key_unique").on(table.eventKey)]);
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { nanoid } from "nanoid";
 import {
@@ -10,6 +10,7 @@ import {
   sessionParticipants,
   telegramGroupMembers,
   telegramProcessedUpdates,
+  telegramGroupAnalysisRateLimits,
   messages,
   notifications,
   submissions,
@@ -217,7 +218,10 @@ export async function getTeacherAnalytics(profileId: number) {
   const groupProfiles = profileIds.length ? await db.select().from(telegramProfiles).where(inArray(telegramProfiles.id, profileIds)) : [];
   const groupStudentBreakdown = groupProfiles.map(profile => {
     const events = sessionEvents.filter(event => event.profileId === profile.id);
-    return { profileId: profile.id, name: [profile.firstName, profile.lastName].filter(Boolean).join(" "), username: profile.username, attendance: new Set(events.map(event => event.sessionId)).size, participation: events.filter(event => ["message", "answer", "question"].includes(event.eventType)).length, answers: events.filter(event => event.eventType === "answer").length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
+    const analyses = events.flatMap(event => { if (!event.analysisJson) return []; try { return [JSON.parse(event.analysisJson) as { classification?: string; confidence?: number; needsTeacher?: boolean }]; } catch { return []; } });
+    const confidences = analyses.map(item => item.confidence).filter((value): value is number => typeof value === "number");
+    const lastAnalysis = analyses[analyses.length - 1];
+    return { profileId: profile.id, name: [profile.firstName, profile.lastName].filter(Boolean).join(" "), username: profile.username, attendance: new Set(events.map(event => event.sessionId)).size, participation: events.filter(event => ["message", "answer", "question"].includes(event.eventType)).length, answers: events.filter(event => event.eventType === "answer").length, questions: events.filter(event => event.eventType === "question").length, averageConfidence: confidences.length ? Math.round((confidences.reduce((sum, value) => sum + value, 0) / confidences.length) * 100) : null, needsTeacher: analyses.some(item => item.needsTeacher === true), lastClassification: lastAnalysis?.classification ?? null, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
   }).sort((left, right) => right.participation - left.participation);
   const sessionAnalytics = sessions.map(session => {
     const members = sessionMembers.filter(member => member.sessionId === session.id);
@@ -284,13 +288,30 @@ export async function getActiveGroupSession(telegramGroupId: string) {
   return rows[0];
 }
 
-export async function claimTelegramUpdate(updateId: number | string) {
+export async function consumeTelegramGroupAnalysisRateLimit(rateKey: string, maxRequests: number, windowMs: number, now = Date.now()) {
+  const db = await getDb();
+  if (!db) return true;
+  const windowStart = new Date(now);
+  const cutoff = new Date(now - windowMs);
+  await db.insert(telegramGroupAnalysisRateLimits).values({ rateKey, windowStartedAt: windowStart, requestCount: 1 }).onDuplicateKeyUpdate({ set: {
+    windowStartedAt: sql`IF(${telegramGroupAnalysisRateLimits.windowStartedAt} < ${cutoff}, ${windowStart}, ${telegramGroupAnalysisRateLimits.windowStartedAt})`,
+    requestCount: sql`IF(${telegramGroupAnalysisRateLimits.windowStartedAt} < ${cutoff}, 1, ${telegramGroupAnalysisRateLimits.requestCount} + 1)`,
+  } });
+  const [row] = await db.select({ requestCount: telegramGroupAnalysisRateLimits.requestCount }).from(telegramGroupAnalysisRateLimits).where(eq(telegramGroupAnalysisRateLimits.rateKey, rateKey)).limit(1);
+  return (row?.requestCount ?? 0) <= maxRequests;
+}
+
+export async function markTelegramUpdateProcessed(updateId: number | string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const key = String(updateId);
   const existing = await db.select().from(telegramProcessedUpdates).where(eq(telegramProcessedUpdates.updateId, key)).limit(1);
   if (existing[0]) return false;
   try { await db.insert(telegramProcessedUpdates).values({ updateId: key }); return true; } catch { return false; }
+}
+
+export async function claimTelegramUpdate(updateId: number | string) {
+  return markTelegramUpdateProcessed(updateId);
 }
 
 export async function upsertTelegramGroupMember(input: { telegramGroupId: string; profileId: number; status: "member" | "restricted" | "administrator" | "creator" | "left" | "kicked" }) {
@@ -325,13 +346,24 @@ export async function ensureSessionParticipant(sessionId: string, profileId: num
   if (!existing[0]) await db.insert(sessionParticipants).values({ sessionId, profileId });
 }
 
-export async function recordGroupSessionEvent(input: { sessionId: string; profileId: number; telegramUserId: string; eventType: "join" | "message" | "question" | "answer" | "system"; content: string; eventKey?: string }) {
+export async function recordGroupSessionEvent(input: { sessionId: string; profileId: number; telegramUserId: string; eventType: "join" | "message" | "question" | "answer" | "system"; content: string; eventKey?: string; analysisJson?: string; replyToMessageId?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   try { await db.insert(groupSessionEvents).values(input); return true; } catch { return false; }
 }
 
-export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string }) {
+export async function getGroupSessionSummary(sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [session, members, events] = await Promise.all([
+    db.select().from(groupSessions).where(eq(groupSessions.id, sessionId)).limit(1),
+    db.select().from(sessionParticipants).where(eq(sessionParticipants.sessionId, sessionId)),
+    db.select().from(groupSessionEvents).where(eq(groupSessionEvents.sessionId, sessionId)),
+  ]);
+  return { session: session[0], attendance: members.length, responses: events.filter(event => event.eventType === "answer").length, questions: events.filter(event => event.eventType === "question").length, analyzed: events.filter(event => Boolean(event.analysisJson)).length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
+}
+
+export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string; lessonBriefJson?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const id = nanoid();

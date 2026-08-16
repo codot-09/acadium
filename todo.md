@@ -67,3 +67,16 @@
 - [x] `handleTelegramUpdate` uchun `/endlesson` integration testini qo‘shish.
 - [x] Webhook darajasida duplicate `update_id` deduplication testini qo‘shish.
 - [x] `/api/telegram/webhook` endpoint-level testida bir xil `update_id` ikki marta yuborilganda handler faqat bir marta ishlashini tekshirish.
+- [x] `/lesson <slug>` commandi mavzu bo‘yicha AI lesson brief, learning goals, key points, resource links va first questionni avtomatik yaratib yuborishi.
+- [x] Group lesson message va resource eventlarini real database’da saqlash.
+- [x] Student reply va savollarini lesson context bilan AI tahlil qilish.
+- [x] Bot AI javobini groupga reply sifatida yuborish va analysis eventini saqlash.
+- [x] Student response, question, confidence va needs-review signalini Analyze menyusida ko‘rsatish.
+- [x] `/endlesson` lesson summaryni groupga yuborishi va sessionni yakuniy analytics bilan yopishi.
+- [x] AI Telegram oqimi uchun validation, rate limit, graceful fallback, Vitest, production build va real webhook QA o‘tkazish.
+- [x] Generated `/lesson` brief va resourcesni explicit group lesson event/message records sifatida saqlash.
+- [x] Analyze’da per-student classification, confidence va needs-review/teacher follow-up signalini ko‘rsatish.
+- [x] Telegram group AI analysis uchun server-side rate limit qo‘shish va testlash.
+- [x] Production webhook verifikatsiyasini avtomatik testlar va setup guide bilan aniq chegaralash.
+- [x] Telegram group AI analysis uchun database-backed persistent rate limit joriy qilish.
+- [x] Rate limitdan oshganda AI call skip bo‘lishi va fallback group reply qaytishi uchun handler integration test yozish.
