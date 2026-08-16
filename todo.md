@@ -80,3 +80,5 @@
 - [x] Production webhook verifikatsiyasini avtomatik testlar va setup guide bilan aniq chegaralash.
 - [x] Telegram group AI analysis uchun database-backed persistent rate limit joriy qilish.
 - [x] Rate limitdan oshganda AI call skip bo‘lishi va fallback group reply qaytishi uchun handler integration test yozish.
+- [x] AI chat/material generation failure sababini topish va production-safe tuzatish.
+- [x] AI request path uchun regression test yozish va previewda chat oqimini tekshirish.

@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { generateAcadiumResponse, generateStructuredMaterial, materialToMarkdown, streamText } from "../ai";
 import { claimTelegramUpdate, getConversationById, saveAiMaterial, saveMessage, upsertTelegramProfile } from "../db";
 import { verifyTelegramInitData } from "../telegram";
+import { getTelegramInitData } from "../aiRequest";
 import { registerTelegramWebhook } from "../telegramBot";
 import type { TelegramUpdate } from "../telegramBot";
 import { createTelegramWebhookApp } from "../telegramWebhookRoute";
@@ -49,8 +50,9 @@ async function startServer() {
       const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId : "";
       if (!prompt) return res.status(400).json({ error: "prompt is required" });
       let answer: string; let profileId: number | undefined;
-      if (typeof req.body?.initData === "string" && process.env.TELEGRAM_BOT_TOKEN) {
-        const identity = verifyTelegramInitData(req.body.initData, process.env.TELEGRAM_BOT_TOKEN);
+      const telegramInitData = getTelegramInitData(req.body?.initData, process.env.TELEGRAM_BOT_TOKEN);
+      if (telegramInitData) {
+        const identity = verifyTelegramInitData(telegramInitData, process.env.TELEGRAM_BOT_TOKEN!);
         const profile = await upsertTelegramProfile(identity);
         if (!profile) throw new Error("Telegram profile unavailable");
         profileId = profile.id;
