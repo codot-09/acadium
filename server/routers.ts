@@ -1,28 +1,122 @@
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import {
+  createAssignment,
+  createTeacherInvite,
+  redeemTeacherInvite,
+  getConversationMessages,
+  getOrCreateAssistantConversation,
+  getStudentDashboard,
+  getTeacherDashboard,
+  getTelegramProfileById,
+  saveMessage,
+  setTelegramProfileRole,
+  upsertTelegramProfile,
+} from "./db";
+import { verifyTelegramInitData } from "./telegram";
+
+const telegramInput = z.object({ initData: z.string().min(1) });
+
+async function getTelegramProfile(initData: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Telegram bot token is not configured" });
+  }
+  try {
+    const identity = verifyTelegramInitData(initData, botToken);
+    const profile = await upsertTelegramProfile(identity);
+    if (!profile) throw new Error("Profile was not created");
+    return profile;
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    throw new TRPCError({ code: "UNAUTHORIZED", message: error instanceof Error ? error.message : "Telegram verification failed" });
+  }
+}
+
+async function requireTeacher(initData: string) {
+  const profile = await getTelegramProfile(initData);
+  if (profile.role !== "teacher") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Teacher access is required" });
+  }
+  return profile;
+}
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  telegram: router({
+    bootstrap: publicProcedure.input(telegramInput).mutation(({ input }) => getTelegramProfile(input.initData)),
+    redeemTeacherInvite: publicProcedure.input(telegramInput.extend({ inviteCode: z.string().trim().min(5).max(64) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const redeemed = await redeemTeacherInvite(input.inviteCode, profile.id);
+      if (!redeemed) throw new TRPCError({ code: "BAD_REQUEST", message: "Invite is invalid or expired" });
+      return { ...(await getTelegramProfile(input.initData))!, role: "teacher" as const };
+    }),
+    selectRole: publicProcedure.input(telegramInput.extend({ role: z.enum(["teacher", "student"]) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      if (input.role === "teacher" && profile.role !== "teacher") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Teacher role must be assigned by an administrator" });
+      }
+      return setTelegramProfileRole(profile.id, input.role);
+    }),
+    dashboard: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getOrCreateAssistantConversation(profile.id);
+      const [history, dashboard] = await Promise.all([
+        getConversationMessages(conversation.id),
+        profile.role === "teacher" ? getTeacherDashboard(profile.id) : getStudentDashboard(profile.id),
+      ]);
+      return { profile, conversation, history, dashboard };
+    }),
+  }),
+  chat: router({
+    history: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getOrCreateAssistantConversation(profile.id);
+      return { conversation, messages: await getConversationMessages(conversation.id) };
+    }),
+    saveUserMessage: publicProcedure.input(telegramInput.extend({ content: z.string().trim().min(1).max(12_000) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getOrCreateAssistantConversation(profile.id);
+      return saveMessage(conversation.id, "user", input.content);
+    }),
+  }),
+  teacher: router({
+    createInvite: protectedProcedure.input(z.object({ expiresInDays: z.number().int().min(1).max(30).default(7) })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access is required" });
+      return createTeacherInvite(ctx.user.id, input.expiresInDays);
+    }),
+    assignTask: publicProcedure.input(telegramInput.extend({
+      studentProfileId: z.number().int().positive(),
+      title: z.string().trim().min(3).max(256),
+      instructions: z.string().trim().min(3).max(10_000),
+      dueAt: z.date().optional(),
+    })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      const student = await getTelegramProfileById(input.studentProfileId);
+      if (!student || student.role !== "student") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Student profile is invalid" });
+      }
+      return createAssignment({
+        teacherProfileId: teacher.id,
+        studentProfileId: input.studentProfileId,
+        title: input.title,
+        instructions: input.instructions,
+        dueAt: input.dueAt,
+      });
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

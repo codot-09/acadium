@@ -8,6 +8,8 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { generateAcadiumResponse, streamText } from "../ai";
+import { handleTelegramUpdate, verifyWebhookSecret } from "../telegramBot";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +38,31 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.post("/api/ai/stream", async (req, res) => {
+    try {
+      const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+      const role = req.body?.role === "student" ? "student" : "teacher";
+      if (!prompt) return res.status(400).json({ error: "prompt is required" });
+      const answer = await generateAcadiumResponse(prompt, role);
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      for await (const chunk of streamText(answer)) {
+        if (res.writableEnded) break;
+        res.write(`data: ${JSON.stringify({ text: chunk })}\\n\\n`);
+      }
+      res.write("data: [DONE]\\n\\n");
+      res.end();
+    } catch (error) {
+      if (!res.headersSent) res.status(500).json({ error: error instanceof Error ? error.message : "AI generation failed" });
+      else res.end();
+    }
+  });
+  app.post("/api/telegram/webhook", async (req, res) => {
+    const supplied = req.header("x-telegram-bot-api-secret-token");
+    if (!verifyWebhookSecret(supplied)) return res.sendStatus(401);
+    try { await handleTelegramUpdate(req.body); res.sendStatus(200); } catch (error) { console.error("[Telegram webhook]", error); res.sendStatus(200); }
+  });
   // tRPC API
   app.use(
     "/api/trpc",

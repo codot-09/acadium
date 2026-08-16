@@ -1,0 +1,1 @@
+ALTER TABLE `messages` MODIFY COLUMN `sender` enum('user','assistant','system','teacher','student') NOT NULL;
