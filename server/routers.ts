@@ -12,7 +12,10 @@ import {
   submitAssignment,
   redeemTeacherInvite,
   getConversationMessages,
+  getConversationById,
+  createAssistantConversation,
   getOrCreateAssistantConversation,
+  getUserConversations,
   getStudentDashboard,
   getStudentSubmissionsForTeacher,
   getTeacherDashboard,
@@ -85,14 +88,34 @@ export const appRouter = router({
     }),
   }),
   chat: router({
+    conversations: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      return getUserConversations(profile.id);
+    }),
+    newConversation: publicProcedure.input(telegramInput.extend({ title: z.string().trim().min(1).max(120).optional() })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      return createAssistantConversation(profile.id, input.title ?? "New chat");
+    }),
     history: publicProcedure.input(telegramInput).query(async ({ input }) => {
       const profile = await getTelegramProfile(input.initData);
       const conversation = await getOrCreateAssistantConversation(profile.id);
       return { conversation, messages: await getConversationMessages(conversation.id) };
     }),
+    thread: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1) })).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getConversationById(input.conversationId);
+      if (!conversation || conversation.ownerProfileId !== profile.id) throw new TRPCError({ code: "FORBIDDEN", message: "Conversation access denied" });
+      return { conversation, messages: await getConversationMessages(conversation.id) };
+    }),
     saveUserMessage: publicProcedure.input(telegramInput.extend({ content: z.string().trim().min(1).max(12_000) })).mutation(async ({ input }) => {
       const profile = await getTelegramProfile(input.initData);
       const conversation = await getOrCreateAssistantConversation(profile.id);
+      return saveMessage(conversation.id, "user", input.content);
+    }),
+    saveMessageToConversation: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1), content: z.string().trim().min(1).max(12_000) })).mutation(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getConversationById(input.conversationId);
+      if (!conversation || conversation.ownerProfileId !== profile.id) throw new TRPCError({ code: "FORBIDDEN", message: "Conversation access denied" });
       return saveMessage(conversation.id, "user", input.content);
     }),
     saveAssistantMessage: publicProcedure.input(telegramInput.extend({ content: z.string().trim().min(1).max(20_000) })).mutation(async ({ input }) => {
@@ -101,11 +124,15 @@ export const appRouter = router({
       return saveMessage(conversation.id, "assistant", input.content);
     }),
     individualHistory: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1) })).query(async ({ input }) => {
-      await getTelegramProfile(input.initData);
+      const profile = await getTelegramProfile(input.initData);
+      const conversation = await getConversationById(input.conversationId);
+      if (!conversation || (conversation.ownerProfileId !== profile.id && conversation.participantProfileId !== profile.id)) throw new TRPCError({ code: "FORBIDDEN", message: "Conversation access denied" });
       return getConversationMessages(input.conversationId);
     }),
     sendIndividualMessage: publicProcedure.input(telegramInput.extend({ conversationId: z.string().min(1), content: z.string().trim().min(1).max(12_000) })).mutation(async ({ input }) => {
       const profile = await getTelegramProfile(input.initData);
+      const conversation = await getConversationById(input.conversationId);
+      if (!conversation || (conversation.ownerProfileId !== profile.id && conversation.participantProfileId !== profile.id)) throw new TRPCError({ code: "FORBIDDEN", message: "Conversation access denied" });
       return saveMessage(input.conversationId, profile.role === "teacher" ? "teacher" : "student", input.content);
     }),
   }),

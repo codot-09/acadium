@@ -31,3 +31,9 @@
 - [x] Saved material history uchun alohida View action qo‘shish.
 - [x] Individual conversationda explicit teacher/student sender rollarini va query invalidationni qo‘shish.
 - [x] Saved AI material View panelida saqlangan lesson plan, quiz va slides ma’lumotlarini hardcoded matnsiz render qilish.
+- [x] ChatGPT/Gemini uslubidagi sodda layout: sidebar/history, markaziy message thread, composer va mobile drawer.
+- [x] Chat history uchun yangi conversation ochish, tanlash va serverdan real yuklash oqimini qo‘shish.
+- [x] Barcha chat xabarlari, AI materiallari, assignments, submissions va session ma’lumotlarini real database orqali ishlatish.
+- [x] API authorization va conversation ownership tekshiruvlarini production-ready qilish.
+- [x] Telegram preview/demo holatida database’ga noto‘g‘ri yoki seed ma’lumot yozilmasligini ta’minlash.
+- [x] Production build, vitest va desktop/mobile visual QA o‘tkazish.

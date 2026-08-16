@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { generateAcadiumResponse, generateStructuredMaterial, materialToMarkdown, streamText } from "../ai";
-import { saveAiMaterial, upsertTelegramProfile } from "../db";
+import { getConversationById, saveAiMaterial, saveMessage, upsertTelegramProfile } from "../db";
 import { verifyTelegramInitData } from "../telegram";
 import { handleTelegramUpdate, verifyWebhookSecret } from "../telegramBot";
 
@@ -44,15 +44,25 @@ async function startServer() {
     try {
       const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
       const role = req.body?.role === "student" ? "student" : "teacher";
+      const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId : "";
       if (!prompt) return res.status(400).json({ error: "prompt is required" });
-      let answer: string;
-      if (role === "teacher" && typeof req.body?.initData === "string" && process.env.TELEGRAM_BOT_TOKEN) {
+      let answer: string; let profileId: number | undefined;
+      if (typeof req.body?.initData === "string" && process.env.TELEGRAM_BOT_TOKEN) {
         const identity = verifyTelegramInitData(req.body.initData, process.env.TELEGRAM_BOT_TOKEN);
         const profile = await upsertTelegramProfile(identity);
         if (!profile) throw new Error("Telegram profile unavailable");
-        const material = await generateStructuredMaterial(prompt);
-        await saveAiMaterial({ teacherProfileId: profile.id, prompt, material });
-        answer = materialToMarkdown(material);
+        profileId = profile.id;
+        if (conversationId) {
+          const conversation = await getConversationById(conversationId);
+          if (!conversation || conversation.ownerProfileId !== profile.id) throw new Error("Conversation access denied");
+        }
+        if (role === "teacher") {
+          const material = await generateStructuredMaterial(prompt);
+          await saveAiMaterial({ teacherProfileId: profile.id, prompt, material });
+          answer = materialToMarkdown(material);
+        } else {
+          answer = await generateAcadiumResponse(prompt, role);
+        }
       } else {
         answer = await generateAcadiumResponse(prompt, role);
       }
@@ -63,7 +73,8 @@ async function startServer() {
         if (res.writableEnded) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
-      res.write("data: [DONE]\n\n");
+      if (profileId && conversationId) await saveMessage(conversationId, "assistant", answer);
+      res.write("data: [DONE]\\n\\n");
       res.end();
     } catch (error) {
       if (!res.headersSent) res.status(500).json({ error: error instanceof Error ? error.message : "AI generation failed" });

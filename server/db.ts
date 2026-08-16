@@ -133,6 +133,28 @@ export async function getOrCreateAssistantConversation(profileId: number) {
   return created[0]!;
 }
 
+export async function createAssistantConversation(profileId: number, title = "New chat") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const id = nanoid();
+  await db.insert(conversations).values({ id, ownerProfileId: profileId, kind: "assistant", title });
+  const rows = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+  return rows[0]!;
+}
+
+export async function getUserConversations(profileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(conversations).where(eq(conversations.ownerProfileId, profileId)).orderBy(desc(conversations.updatedAt));
+}
+
+export async function getConversationById(conversationId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const rows = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
+  return rows[0];
+}
+
 export async function getConversationMessages(conversationId: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
