@@ -113,3 +113,22 @@
 - [x] `teacher.sessions` querysi analytics fallbackdan mustaqil ishlashini testlash.
 - [x] Polling/refetch interval oqimini fake timer bilan regression testlash.
 - [x] Resume va End session Web App action payloadlari hamda mutation success refetch oqimini testlash.
+- [x] Teacher dashboardda database-backed ma’lumotlar ko‘rinmasligi sababini topish va tuzatish.
+- [x] Dashboard query, Telegram identity va real-time refresh oqimini production-safe qilish.
+- [x] Teacher dashboard UI, loading/error/empty state va responsive layoutni optimallashtirish.
+- [x] Dashboard uchun regression test, database verification, build va visual QA o‘tkazish.
+- [x] Historical group session ownerlari uchun teacher accessni xavfsiz recover/backfill qilish.
+- [x] Real teacher identity bilan persisted session, analytics va student data dashboard smoke verificationini bajarish.
+- [x] Dashboard fixidan keyin full `pnpm test`, `pnpm build` va desktop/mobile visual QA o‘tkazish.
+- [ ] Real teacher Telegram initData bilan dashboard E2E smoke verification: persisted sessions, analytics KPI va student rowsni browserda tasdiqlash.
+- [ ] Authenticated `teacher.sessions` va `telegram.analytics` successful response/log evidenceini saqlash.
+- [x] Teacher dashboardda secure local source upload va source library qo‘shish.
+- [x] Fayl metadata, S3 key va extracted textni database’da saqlash; raw bytesni DBga yozmaslik.
+- [x] Teacher uchun Web/Local mode contracti va group/session default mode persistenceini qo‘shish.
+- [x] Local mode’da lesson va reply AI’ni biriktirilgan manbalarga grounded qilish.
+- [x] Web mode’da internet-knowledge oqimini saqlash va source boundaryni aniq ko‘rsatish.
+- [x] File upload, extraction, mode switching va Telegram source-grounding regression testlarini yozish.
+- [x] Source library UI va responsive dashboard visual QAni bajarish.
+- [x] Local mode group lesson va reply analysisga persisted source snapshot contexti uzatilishini integration testda tasdiqlash.
+- [x] Source upload endpointda teacher auth, supported type va 15 MB limit regressionlarini testlash.
+- [x] Teacher source library va Web/Local mode UI oqimini component testda tasdiqlash.

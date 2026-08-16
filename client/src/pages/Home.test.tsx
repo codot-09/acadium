@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import React from "react";
 import "@testing-library/jest-dom/vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Home from "./Home";
 
-const calls = vi.hoisted(() => ({ sessionRefetch: vi.fn(), analyticsRefetch: vi.fn(), detailRefetch: vi.fn(), statusMutate: vi.fn(), statusOnSuccess: vi.fn(), sessionQueryOptions: {} as Record<string, unknown> }));
+const calls = vi.hoisted(() => ({ sessionRefetch: vi.fn(), analyticsRefetch: vi.fn(), detailRefetch: vi.fn(), sourceRefetch: vi.fn(), statusMutate: vi.fn(), statusOnSuccess: vi.fn(), setModeMutate: vi.fn(), archiveMutate: vi.fn(), sessionQueryOptions: {} as Record<string, unknown> }));
 const state = vi.hoisted(() => ({
   loading: false,
   missing: false,
+  bootstrapRole: "teacher" as "teacher" | "student",
   sessions: [{ id: "session-1", title: "Fotosintez", groupTitle: "Biology class", status: "ended", createdAt: new Date() }],
+  sources: [] as Array<{ id: string; name: string; mimeType: string; sizeBytes: number }>,
   analytics: { sessions: 1, groupStudents: 1, groupAnswers: 1, activity: [], groupStudentBreakdown: [{ profileId: 11, name: "Student One", username: "studentone", attendance: 1, participation: 1, answers: 1, averageConfidence: 88, needsTeacher: false, lastClassification: "answer", lastActivity: new Date() }], sessionAnalytics: [{ sessionId: "session-1", title: "Fotosintez", groupTitle: "Biology class", status: "ended", attendance: 1, responses: 1, participation: 1, lastActivity: new Date() }] },
   detail: { session: { id: "session-1", title: "Fotosintez", groupTitle: "Biology class", topic: "fotosintez", status: "ended" }, participants: [{ participant: { profileId: 11 }, profile: { firstName: "Student", lastName: "One", username: "studentone" } }], events: [{ event: { id: 1, eventType: "answer", content: "Fotosintez bargda bo‘ladi", createdAt: new Date(), analysisJson: JSON.stringify({ classification: "answer", confidence: 0.88 }) }, profile: { firstName: "Student", lastName: "One", username: "studentone" } }] },
   detail2: { session: { id: "session-2", title: "Hujayra tuzilishi", groupTitle: "Biology class", topic: "hujayra", status: "ended" }, participants: [], events: [] },
@@ -17,20 +19,30 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/lib/trpc", () => ({ trpc: {
   telegram: {
-    bootstrap: { useMutation: () => ({ mutate: vi.fn(), data: { firstName: "Teacher" } }) },
+    bootstrap: { useMutation: () => ({ mutate: vi.fn(), data: { id: 10, firstName: "Teacher", role: state.bootstrapRole }, isPending: false, isError: false }) },
     analytics: { useQuery: () => ({ data: state.analytics, isFetching: false, refetch: calls.analyticsRefetch }) },
   },
-  teacher: { sessions: { useQuery: (_input: unknown, options: Record<string, unknown>) => { Object.assign(calls.sessionQueryOptions, options); return { data: state.sessions, isFetching: false, refetch: calls.sessionRefetch }; } }, sessionDetail: { useQuery: (input: { sessionId: string }) => ({ data: state.loading || state.missing ? undefined : input.sessionId === "session-2" ? state.detail2 : state.detail, isLoading: state.loading, refetch: calls.detailRefetch }) }, updateSessionStatus: { useMutation: (options: { onSuccess?: () => unknown }) => { calls.statusOnSuccess = vi.fn(options.onSuccess); return { mutate: calls.statusMutate, isPending: false }; } } },
+  teacher: { sessions: { useQuery: (_input: unknown, options: Record<string, unknown>) => { Object.assign(calls.sessionQueryOptions, options); return { data: state.sessions, isFetching: false, refetch: calls.sessionRefetch }; } }, sessionDetail: { useQuery: (input: { sessionId: string }) => ({ data: state.loading || state.missing ? undefined : input.sessionId === "session-2" ? state.detail2 : state.detail, isLoading: state.loading, refetch: calls.detailRefetch }) }, sources: { useQuery: () => ({ data: state.sources, isFetching: false, refetch: calls.sourceRefetch }) }, aiSettings: { useQuery: () => ({ data: { mode: "web" as const }, isFetching: false, refetch: vi.fn() }) }, setAiMode: { useMutation: () => ({ mutate: calls.setModeMutate, isPending: false }) }, archiveSource: { useMutation: () => ({ mutate: calls.archiveMutate, isPending: false }) }, updateSessionStatus: { useMutation: (options: { onSuccess?: () => unknown }) => { calls.statusOnSuccess = vi.fn(options.onSuccess); return { mutate: calls.statusMutate, isPending: false }; } } },
 } }));
 
 describe("group-first teacher workspace", () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
   beforeEach(() => {
     vi.clearAllMocks();
     state.loading = false;
     state.missing = false;
+    state.bootstrapRole = "teacher";
     state.sessions = [{ id: "session-1", title: "Fotosintez", groupTitle: "Biology class", status: "ended", createdAt: new Date() }];
+    state.sources = [];
     calls.sessionQueryOptions = {};
     (window as Window & { Telegram?: unknown }).Telegram = { WebApp: { initData: "telegram-init-data", ready: vi.fn(), expand: vi.fn() } };
+  });
+
+  it("shows a clear access state instead of fake dashboard data for a student profile", async () => {
+    state.bootstrapRole = "student";
+    render(<Home />);
+    await waitFor(() => expect(screen.getByText("Teacher access is not active")).toBeInTheDocument());
+    expect(screen.getByText(/No demo data is shown/)).toBeInTheDocument();
   });
 
   it("selects a saved lesson and shows its conversation timeline", async () => {
@@ -125,6 +137,30 @@ describe("group-first teacher workspace", () => {
     render(<Home />);
     await waitFor(() => expect(screen.getByText("Select a lesson session")).toBeInTheDocument());
     expect(screen.getByText(/Choose a saved Telegram lesson/)).toBeInTheDocument();
+  });
+
+  it("opens teaching sources with the AI grounding mode control", async () => {
+    render(<Home />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Teaching sources/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Teaching sources/i }));
+    expect(screen.getByText("AI SOURCE MODE")).toBeInTheDocument();
+    expect(screen.getByText(/Telegram lessons use general internet knowledge/)).toBeInTheDocument();
+    const uploadResponse = { ok: true, json: async () => ({ source: { id: "source-uploaded" } }) };
+    const fetchMock = vi.fn().mockResolvedValue(uploadResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(["Photosynthesis"], "biology.txt", { type: "text/plain" })] } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/teacher/sources/upload", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(calls.sourceRefetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Local" }));
+    expect(calls.setModeMutate).toHaveBeenCalledWith({ initData: "telegram-init-data", mode: "local" });
+    state.sources = [{ id: "source-1", name: "Biology book.txt", mimeType: "text/plain", sizeBytes: 2048 }];
+    cleanup();
+    render(<Home />);
+    fireEvent.click(screen.getByRole("button", { name: /Teaching sources/i }));
+    await waitFor(() => expect(screen.getByText("Biology book.txt")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Archive Biology book.txt" }));
+    expect(calls.archiveMutate).toHaveBeenCalledWith({ initData: "telegram-init-data", sourceId: "source-1" });
   });
 
   it("shows a useful empty state when no group sessions exist", async () => {

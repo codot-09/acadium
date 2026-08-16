@@ -10,8 +10,11 @@ const dbMocks = vi.hoisted(() => ({
   ensureSessionParticipant: vi.fn(),
   ensureTeacherStudentLink: vi.fn(),
   getActiveGroupSession: vi.fn(),
+  getTeacherAiMode: vi.fn(),
+  getTeacherSourceContext: vi.fn(),
   recordGroupSessionEvent: vi.fn(),
   updateGroupSessionStatus: vi.fn(),
+  setTelegramProfileRole: vi.fn(),
   upsertTelegramGroupMember: vi.fn(),
   upsertTelegramProfile: vi.fn(),
   getGroupSessionSummary: vi.fn(),
@@ -30,8 +33,11 @@ describe("Telegram group lesson handler", () => {
     aiMocks.analyzeGroupMessage.mockResolvedValue({ classification: "answer", reply: "Good answer", confidence: 0.9, needsTeacher: false, suggestedNextStep: "Try an example" });
     dbMocks.upsertTelegramProfile.mockResolvedValue({ id: 10 });
     dbMocks.getActiveGroupSession.mockResolvedValue(undefined);
+    dbMocks.getTeacherAiMode.mockResolvedValue("web");
+    dbMocks.getTeacherSourceContext.mockResolvedValue([]);
     dbMocks.createGroupSession.mockResolvedValue({ id: "session-1", topic: "biology" });
     dbMocks.recordGroupSessionEvent.mockResolvedValue(true);
+    dbMocks.setTelegramProfileRole.mockResolvedValue({ id: 10, role: "teacher" });
     dbMocks.getGroupSessionSummary.mockResolvedValue({ attendance: 2, responses: 1, questions: 1, analyzed: 1 });
     dbMocks.consumeTelegramGroupAnalysisRateLimit.mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -43,6 +49,7 @@ describe("Telegram group lesson handler", () => {
 
   it("starts a lesson when teacher and bot are admins", async () => {
     await handleTelegramUpdate({ update_id: 101, message: { chat: { id: -100, type: "supergroup", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/lesson biology" } });
+    expect(dbMocks.setTelegramProfileRole).toHaveBeenCalledWith(10, "teacher");
     expect(dbMocks.createGroupSession).toHaveBeenCalledWith(expect.objectContaining({ teacherProfileId: 10, telegramGroupId: "-100", topic: "biology" }));
     expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalled();
   });
@@ -95,6 +102,16 @@ describe("Telegram group lesson handler", () => {
     expect(dbMocks.ensureTeacherStudentLink).toHaveBeenCalledWith(10, 11);
     expect(aiMocks.analyzeGroupMessage).toHaveBeenCalledWith("biology", expect.any(Object), "Fotosintez bargda bo‘ladi", expect.stringContaining("Fotosintez nima?"));
     expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalledWith(expect.objectContaining({ profileId: 11, eventType: "answer", replyToMessageId: "40" }));
+  });
+
+  it("grounds a local-mode lesson and reply analysis in the persisted teacher sources", async () => {
+    dbMocks.getTeacherAiMode.mockResolvedValue("local");
+    dbMocks.getTeacherSourceContext.mockResolvedValue([{ id: "source-1", name: "Biology book.txt", mimeType: "text/plain", extractedText: "Photosynthesis uses light energy." }]);
+    await handleTelegramUpdate({ update_id: 115, message: { chat: { id: -100, type: "group", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/lesson photosynthesis" } });
+    expect(aiMocks.generateGroupLessonBrief).toHaveBeenCalledWith("photosynthesis", expect.objectContaining({ mode: "local", sources: expect.arrayContaining([expect.objectContaining({ id: "source-1" })]) }));
+    dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-local", teacherProfileId: 10, topic: "photosynthesis", aiMode: "local", sourceIdsJson: JSON.stringify(["source-1"]), lessonBriefJson: JSON.stringify({ title: "Photosynthesis", overview: "Overview", objectives: [], keyPoints: [], resources: [], firstQuestion: "Question" }) });
+    await handleTelegramUpdate({ update_id: 116, message: { message_id: 51, chat: { id: -100, type: "group", title: "Class" }, from: { id: 8, first_name: "Student" }, text: "It uses light", reply_to_message: { message_id: 40, text: "Lesson question" } } });
+    expect(aiMocks.analyzeGroupMessage).toHaveBeenCalledWith("photosynthesis", expect.any(Object), "It uses light", expect.stringContaining("Lesson question"), expect.objectContaining({ mode: "local", sources: expect.arrayContaining([expect.objectContaining({ id: "source-1" })]) }));
   });
 
   it("pauses and resumes an active lesson from teacher commands", async () => {

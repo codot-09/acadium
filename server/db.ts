@@ -16,6 +16,8 @@ import {
   submissions,
   teacherStudentLinks,
   teacherInvites,
+  teacherSources,
+  teacherAiSettings,
   telegramProfiles,
   type InsertUser,
   users,
@@ -110,6 +112,55 @@ export async function setTelegramProfileRole(profileId: number, role: "teacher" 
   await db.update(telegramProfiles).set({ role }).where(eq(telegramProfiles.id, profileId));
   const rows = await db.select().from(telegramProfiles).where(eq(telegramProfiles.id, profileId)).limit(1);
   return rows[0];
+}
+
+export async function getTeacherAiMode(teacherProfileId: number): Promise<"web" | "local"> {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const rows = await db.select().from(teacherAiSettings).where(eq(teacherAiSettings.teacherProfileId, teacherProfileId)).limit(1);
+  return rows[0]?.mode ?? "web";
+}
+
+export async function setTeacherAiMode(teacherProfileId: number, mode: "web" | "local") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.insert(teacherAiSettings).values({ teacherProfileId, mode }).onDuplicateKeyUpdate({ set: { mode, updatedAt: new Date() } });
+  const rows = await db.select().from(teacherAiSettings).where(eq(teacherAiSettings.teacherProfileId, teacherProfileId)).limit(1);
+  return rows[0]!;
+}
+
+export async function getTeacherSources(teacherProfileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select({ id: teacherSources.id, name: teacherSources.name, mimeType: teacherSources.mimeType, sizeBytes: teacherSources.sizeBytes, status: teacherSources.status, extractedText: teacherSources.extractedText, createdAt: teacherSources.createdAt }).from(teacherSources).where(and(eq(teacherSources.teacherProfileId, teacherProfileId), eq(teacherSources.status, "ready"))).orderBy(desc(teacherSources.createdAt));
+}
+
+export async function getTeacherSourceContext(teacherProfileId: number, sourceIdsJson?: string | null) {
+  const sources = await getTeacherSources(teacherProfileId);
+  if (!sourceIdsJson) return sources;
+  try {
+    const sourceIds = JSON.parse(sourceIdsJson) as string[];
+    if (!Array.isArray(sourceIds)) return sources;
+    const allowed = new Set(sourceIds);
+    return sources.filter(source => allowed.has(source.id));
+  } catch {
+    return sources;
+  }
+}
+
+export async function createTeacherSource(input: { id: string; teacherProfileId: number; name: string; storageKey: string; mimeType: string; sizeBytes: number; extractedText: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.insert(teacherSources).values(input);
+  const rows = await db.select({ id: teacherSources.id, name: teacherSources.name, mimeType: teacherSources.mimeType, sizeBytes: teacherSources.sizeBytes, status: teacherSources.status, extractedText: teacherSources.extractedText, createdAt: teacherSources.createdAt }).from(teacherSources).where(eq(teacherSources.id, input.id)).limit(1);
+  return rows[0]!;
+}
+
+export async function archiveTeacherSource(teacherProfileId: number, sourceId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(teacherSources).set({ status: "archived" }).where(and(eq(teacherSources.id, sourceId), eq(teacherSources.teacherProfileId, teacherProfileId), eq(teacherSources.status, "ready")));
+  return true;
 }
 
 export async function getOrCreateIndividualConversation(teacherProfileId: number, studentProfileId: number) {
@@ -391,7 +442,7 @@ export async function getGroupSessionSummary(sessionId: string) {
   return { session: session[0], attendance: members.length, responses: events.filter(event => event.eventType === "answer").length, questions: events.filter(event => event.eventType === "question").length, analyzed: events.filter(event => Boolean(event.analysisJson)).length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
 }
 
-export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string; lessonBriefJson?: string }) {
+export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string; aiMode?: "web" | "local"; sourceIdsJson?: string; lessonBriefJson?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
   const id = nanoid();

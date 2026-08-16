@@ -89,6 +89,26 @@ export const submissions = mysqlTable("submissions", {
   submittedAt: timestamp("submittedAt").defaultNow().notNull(),
 }, table => [index("submissions_assignment_idx").on(table.assignmentId)]);
 
+export const teacherSources = mysqlTable("teacher_sources", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  teacherProfileId: int("teacherProfileId").notNull(),
+  name: varchar("name", { length: 256 }).notNull(),
+  storageKey: text("storageKey").notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  extractedText: text("extractedText"),
+  status: mysqlEnum("sourceStatus", ["ready", "archived", "error"]).default("ready").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("teacher_sources_teacher_idx").on(table.teacherProfileId), index("teacher_sources_status_idx").on(table.status)]);
+
+export const teacherAiSettings = mysqlTable("teacher_ai_settings", {
+  teacherProfileId: int("teacherProfileId").primaryKey(),
+  mode: mysqlEnum("mode", ["web", "local"]).default("web").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const groupSessions = mysqlTable("group_sessions", {
   id: varchar("id", { length: 32 }).primaryKey(),
   teacherProfileId: int("teacherProfileId").notNull(),
@@ -96,6 +116,8 @@ export const groupSessions = mysqlTable("group_sessions", {
   groupTitle: varchar("groupTitle", { length: 256 }).notNull(),
   title: varchar("title", { length: 256 }).notNull(),
   topic: text("topic").notNull(),
+  aiMode: mysqlEnum("aiMode", ["web", "local"]).default("web").notNull(),
+  sourceIdsJson: text("sourceIdsJson"),
   lessonBriefJson: text("lessonBriefJson"),
   status: mysqlEnum("sessionStatus", ["planned", "live", "paused", "ended"]).default("planned").notNull(),
   startedAt: timestamp("startedAt"),

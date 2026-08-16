@@ -1,5 +1,5 @@
 import { analyzeGroupMessage, generateGroupLessonBrief, type GroupLessonBrief } from "./ai";
-import { consumeTelegramGroupAnalysisRateLimit, createGroupSession, ensureSessionParticipant, ensureTeacherStudentLink, getActiveGroupSession, getGroupSessionSummary, recordGroupSessionEvent, updateGroupSessionStatus, upsertTelegramGroupMember, upsertTelegramProfile } from "./db";
+import { consumeTelegramGroupAnalysisRateLimit, createGroupSession, ensureSessionParticipant, ensureTeacherStudentLink, getActiveGroupSession, getGroupSessionSummary, getTeacherAiMode, getTeacherSourceContext, recordGroupSessionEvent, setTelegramProfileRole, updateGroupSessionStatus, upsertTelegramGroupMember, upsertTelegramProfile } from "./db";
 
 export type TelegramUpdate = {
   update_id?: number;
@@ -116,16 +116,20 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     const isAdmin = await isTelegramGroupAdmin(chat.id, from.id);
     if (!isAdmin) { await sendTelegramMessage(chat.id, "Faqat guruh administratori online lesson boshlashi mumkin."); return; }
     if (!(await isBotGroupAdmin(chat.id))) { await sendTelegramMessage(chat.id, "Acadium bot guruhda administrator bo‘lishi va xabar yuborish huquqiga ega bo‘lishi kerak."); return; }
+    await setTelegramProfileRole(profile.id, "teacher");
     if (!command.argument) { await sendTelegramMessage(chat.id, "Format: <code>/lesson fotosintez-8-sinf</code>"); return; }
     const active = await getActiveGroupSession(String(chat.id));
     if (active) { await sendTelegramMessage(chat.id, `<b>Lesson allaqachon davom etmoqda.</b>\n\nTopic: ${active.topic}`); return; }
+    const aiMode = await getTeacherAiMode(profile.id);
+    const sources = aiMode === "local" ? await getTeacherSourceContext(profile.id) : [];
     let brief: GroupLessonBrief;
-    try { brief = await generateGroupLessonBrief(command.argument); } catch (error) { console.error("[Telegram lesson] Brief generation failed:", error); await sendTelegramMessage(chat.id, "Acadium bu mavzu uchun lesson materialini hozir yaratolmadi. Iltimos, mavzuni qisqaroq qilib qayta yuboring."); return; }
-    const session = await createGroupSession({ teacherProfileId: profile.id, telegramGroupId: String(chat.id), groupTitle: chat.title ?? "Telegram group", title: brief.title, topic: command.argument, lessonBriefJson: JSON.stringify(brief) });
+    try { brief = await generateGroupLessonBrief(command.argument, { mode: aiMode, sources }); } catch (error) { console.error("[Telegram lesson] Brief generation failed:", error); await sendTelegramMessage(chat.id, "Acadium bu mavzu uchun lesson materialini hozir yaratolmadi. Iltimos, mavzuni qisqaroq qilib qayta yuboring."); return; }
+    const session = await createGroupSession({ teacherProfileId: profile.id, telegramGroupId: String(chat.id), groupTitle: chat.title ?? "Telegram group", title: brief.title, topic: command.argument, aiMode, sourceIdsJson: JSON.stringify(sources.map(source => source.id)), lessonBriefJson: JSON.stringify(brief) });
     await ensureSessionParticipant(session.id, profile.id);
     await recordGroupSessionEvent({ sessionId: session.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "system", content: `Lesson started: ${command.argument}`, eventKey: `update:${update.update_id ?? "unknown"}:lesson` });
     await recordGroupSessionEvent({ sessionId: session.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "system", content: JSON.stringify({ type: "lesson_brief", brief }), eventKey: `session:${session.id}:brief` });
     await Promise.all(brief.resources.slice(0, 5).map((resource, index) => recordGroupSessionEvent({ sessionId: session.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "system", content: JSON.stringify({ type: "resource", resource }), eventKey: `session:${session.id}:resource:${index}` })));
+    if (aiMode === "local" && !sources.length) await sendTelegramMessage(chat.id, "<i>Local mode tanlangan, ammo hozircha tayyor source biriktirilmagan. Teacher dashboarddan darslik yoki fayl qo‘shing.</i>");
     await sendTelegramMessage(chat.id, formatGroupLessonBrief(brief));
     return;
   }
@@ -187,8 +191,16 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     const brief = parseLessonBrief(active.lessonBriefJson);
     const replyContext = message.reply_to_message?.text ? `Original Telegram lesson message:\n${message.reply_to_message.text}` : undefined;
     const referencedMessageId = message.reply_to_message?.message_id ?? message.message_id;
+    const sessionMode = active.aiMode ?? "web";
+    const sessionSources = sessionMode === "local" ? await getTeacherSourceContext(active.teacherProfileId, active.sourceIdsJson) : [];
+    const localContext = sessionMode === "local" ? { mode: sessionMode, sources: sessionSources } as const : undefined;
     let analysis;
-    try { analysis = replyContext ? await analyzeGroupMessage(active.topic, brief, text, replyContext) : await analyzeGroupMessage(active.topic, brief, text); } catch (error) { console.error("[Telegram lesson] Student analysis failed:", error); await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "answer", content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, replyToMessageId: referencedMessageId ? String(referencedMessageId) : undefined }); await sendTelegramMessage(chat.id, "Javobingiz qabul qilindi. Acadium tahlilini yakunlay olmadi; teacher keyinroq ko‘rib chiqadi.", message.message_id); return; }
+    try {
+      if (replyContext && localContext) analysis = await analyzeGroupMessage(active.topic, brief, text, replyContext, localContext);
+      else if (replyContext) analysis = await analyzeGroupMessage(active.topic, brief, text, replyContext);
+      else if (localContext) analysis = await analyzeGroupMessage(active.topic, brief, text, undefined, localContext);
+      else analysis = await analyzeGroupMessage(active.topic, brief, text);
+    } catch (error) { console.error("[Telegram lesson] Student analysis failed:", error); await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType: "answer", content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, replyToMessageId: referencedMessageId ? String(referencedMessageId) : undefined }); await sendTelegramMessage(chat.id, "Javobingiz qabul qilindi. Acadium tahlilini yakunlay olmadi; teacher keyinroq ko‘rib chiqadi.", message.message_id); return; }
     const eventType = analysis.classification === "question" ? "question" : "answer";
     await recordGroupSessionEvent({ sessionId: active.id, profileId: profile.id, telegramUserId: String(from.id), eventType, content: text, eventKey: `update:${update.update_id ?? "unknown"}:message`, analysisJson: JSON.stringify({ ...analysis, replyContext }), replyToMessageId: referencedMessageId ? String(referencedMessageId) : undefined });
     const teacherNote = analysis.needsTeacher ? "\n\n<i>Teacher uchun: bu javob shaxsiy follow-up talab qilishi mumkin.</i>" : "";

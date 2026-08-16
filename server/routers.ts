@@ -25,6 +25,10 @@ import {
   getTeacherGroupSessions,
   updateTeacherGroupSessionStatus,
   getTelegramProfileById,
+  getTeacherSources,
+  getTeacherAiMode,
+  setTeacherAiMode,
+  archiveTeacherSource,
   saveMessage,
   setTelegramProfileRole,
   upsertTelegramProfile,
@@ -177,6 +181,23 @@ export const appRouter = router({
     sessions: publicProcedure.input(telegramInput).query(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);
       return getTeacherGroupSessions(teacher.id);
+    }),
+    sources: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return getTeacherSources(teacher.id);
+    }),
+    aiSettings: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return { mode: await getTeacherAiMode(teacher.id) };
+    }),
+    setAiMode: publicProcedure.input(telegramInput.extend({ mode: z.enum(["web", "local"]) })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      return setTeacherAiMode(teacher.id, input.mode);
+    }),
+    archiveSource: publicProcedure.input(telegramInput.extend({ sourceId: z.string().min(1) })).mutation(async ({ input }) => {
+      const teacher = await requireTeacher(input.initData);
+      await archiveTeacherSource(teacher.id, input.sourceId);
+      return { success: true as const };
     }),
     sessionDetail: publicProcedure.input(telegramInput.extend({ sessionId: z.string().min(1) })).query(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);

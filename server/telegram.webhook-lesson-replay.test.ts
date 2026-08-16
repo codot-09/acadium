@@ -10,9 +10,12 @@ const dbMocks = vi.hoisted(() => ({
   ensureSessionParticipant: vi.fn(),
   ensureTeacherStudentLink: vi.fn(),
   getActiveGroupSession: vi.fn(),
+  getTeacherAiMode: vi.fn(),
+  getTeacherSourceContext: vi.fn(),
   getGroupSessionSummary: vi.fn(),
   recordGroupSessionEvent: vi.fn(),
   updateGroupSessionStatus: vi.fn(),
+  setTelegramProfileRole: vi.fn(),
   upsertTelegramGroupMember: vi.fn(),
   upsertTelegramProfile: vi.fn(),
   consumeTelegramGroupAnalysisRateLimit: vi.fn(),
@@ -31,6 +34,8 @@ describe("production-parity /lesson webhook replay", () => {
     const replyCalls: Array<{ telegramId: string; profileId: number; groupId: string }> = [];
     dbMocks.upsertTelegramProfile.mockImplementation(async (identity: { telegramId: string }) => ({ id: identity.telegramId === "8" ? 11 : 12 }));
     dbMocks.getActiveGroupSession.mockResolvedValue({ id: "session-reply", teacherProfileId: 10, topic: "biology", lessonBriefJson: JSON.stringify({ title: "Biology", overview: "Overview", objectives: [], keyPoints: [], resources: [], firstQuestion: "Question" }) });
+    dbMocks.getTeacherAiMode.mockResolvedValue("web");
+    dbMocks.getTeacherSourceContext.mockResolvedValue([]);
     dbMocks.upsertTelegramGroupMember.mockImplementation(async (input: { telegramGroupId: string; profileId: number }) => { replyCalls.push({ telegramId: input.profileId === 11 ? "8" : "9", profileId: input.profileId, groupId: input.telegramGroupId }); });
     aiMocks.analyzeGroupMessage.mockResolvedValue({ classification: "answer", reply: "Good answer", confidence: 0.88, needsTeacher: false, suggestedNextStep: "Continue" });
     dbMocks.consumeTelegramGroupAnalysisRateLimit.mockResolvedValue(true);
@@ -67,9 +72,12 @@ describe("production-parity /lesson webhook replay", () => {
     aiMocks.generateGroupLessonBrief.mockResolvedValue({ title: "Fotosintez", overview: "Safe lesson", objectives: ["Understand"], keyPoints: ["Light"], resources: [{ title: "Textbook", summary: "Trusted source", searchQuery: "fotosintez 8 sinf" }], firstQuestion: "Fotosintez nima?" });
     dbMocks.upsertTelegramProfile.mockResolvedValue({ id: 10 });
     dbMocks.getActiveGroupSession.mockResolvedValue(undefined);
+    dbMocks.getTeacherAiMode.mockResolvedValue("web");
+    dbMocks.getTeacherSourceContext.mockResolvedValue([]);
     dbMocks.createGroupSession.mockResolvedValue({ id: "session-replay", topic: "fotosintez-8-sinf" });
     dbMocks.ensureSessionParticipant.mockResolvedValue(true);
     dbMocks.recordGroupSessionEvent.mockResolvedValue(true);
+    dbMocks.setTelegramProfileRole.mockResolvedValue({ id: 10, role: "teacher" });
     const originalFetch = globalThis.fetch;
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith("http://127.0.0.1")) return originalFetch(url, init);
