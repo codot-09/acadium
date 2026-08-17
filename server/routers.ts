@@ -33,9 +33,20 @@ import {
   setTelegramProfileRole,
   upsertTelegramProfile,
   getSubscriptionStatus,
+  getAdminOverview,
+  getAdminProfiles,
+  getAdminSessions,
+  getAdminReceipts,
+  getAdminSubscriptions,
+  adminSetTelegramProfileRole,
+  adminSetReceiptStatus,
+  adminSetSubscriptionStatus,
+  adminSetSessionStatus,
+  activateIndividualSubscription,
 } from "./db";
 import { verifyTelegramInitData } from "./telegram";
 import { CLICK_PAYMENT_URL, ENTERPRISE_CONTACT, INDIVIDUAL_PRICE_UZS } from "./subscriptions";
+import { ADMIN_SESSION_COOKIE, createAdminSession, getAdminCookie, verifyAdminCredentials, verifyAdminSession } from "./adminAuth";
 
 const telegramInput = z.object({ initData: z.string().min(1) });
 
@@ -108,6 +119,24 @@ export const appRouter = router({
       const profile = await getTelegramProfile(input.initData);
       return { profile: { id: profile.id, role: profile.role }, ...await getSubscriptionStatus(profile.id), individualPrice: INDIVIDUAL_PRICE_UZS, currency: "UZS", clickPaymentUrl: CLICK_PAYMENT_URL, enterpriseContact: ENTERPRISE_CONTACT };
     }),
+  }),
+  admin: router({
+    login: publicProcedure.input(z.object({ login: z.string().trim().email().max(256), password: z.string().min(1).max(512) })).mutation(({ input, ctx }) => {
+      if (!verifyAdminCredentials(input.login, input.password)) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid admin credentials" });
+      ctx.res.cookie(ADMIN_SESSION_COOKIE, createAdminSession(), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 12 * 60 * 60 * 1000, path: "/" });
+      return { authenticated: true as const };
+    }),
+    logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(ADMIN_SESSION_COOKIE, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" }); return { success: true as const }; }),
+    me: publicProcedure.query(({ ctx }) => ({ authenticated: verifyAdminSession(getAdminCookie(ctx.req.headers.cookie)) })),
+    overview: publicProcedure.use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).query(() => getAdminOverview()),
+    profiles: publicProcedure.use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).query(() => getAdminProfiles()),
+    sessions: publicProcedure.use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).query(() => getAdminSessions()),
+    receipts: publicProcedure.use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).query(() => getAdminReceipts()),
+    subscriptions: publicProcedure.use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).query(() => getAdminSubscriptions()),
+    setProfileRole: publicProcedure.input(z.object({ profileId: z.number().int().positive(), role: z.enum(["teacher", "student"]) })).use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).mutation(({ input }) => adminSetTelegramProfileRole(input.profileId, input.role)),
+    setReceiptStatus: publicProcedure.input(z.object({ receiptId: z.string().min(1), status: z.enum(["approved", "rejected"]) })).use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).mutation(async ({ input }) => { const receipt = await adminSetReceiptStatus(input.receiptId, input.status); if (input.status === "approved" && receipt?.parsedAmount === INDIVIDUAL_PRICE_UZS) await activateIndividualSubscription({ profileId: receipt.profileId, receiptId: receipt.id, amount: INDIVIDUAL_PRICE_UZS }); return receipt; }),
+    setSubscriptionStatus: publicProcedure.input(z.object({ subscriptionId: z.string().min(1), status: z.enum(["active", "expired", "cancelled"]) })).use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).mutation(({ input }) => adminSetSubscriptionStatus(input.subscriptionId, input.status)),
+    setSessionStatus: publicProcedure.input(z.object({ sessionId: z.string().min(1), status: z.enum(["live", "paused", "ended"]) })).use(({ ctx, next }) => { if (!verifyAdminSession(getAdminCookie(ctx.req.headers.cookie))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin session required" }); return next(); }).mutation(({ input }) => adminSetSessionStatus(input.sessionId, input.status)),
   }),
   chat: router({
     conversations: publicProcedure.input(telegramInput).query(async ({ input }) => {

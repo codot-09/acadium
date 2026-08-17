@@ -526,6 +526,74 @@ export async function redeemTeacherInvite(code: string, profileId: number) {
   return true;
 }
 
+export async function getAdminOverview() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const [profiles, teachers, students, groups, sessions, activeSubscriptions, pendingReceipts, sources] = await Promise.all([
+    db.select({ value: sql<number>`count(*)` }).from(telegramProfiles),
+    db.select({ value: sql<number>`count(*)` }).from(telegramProfiles).where(eq(telegramProfiles.role, "teacher")),
+    db.select({ value: sql<number>`count(*)` }).from(telegramProfiles).where(eq(telegramProfiles.role, "student")),
+    db.select({ value: sql<number>`count(distinct ${groupSessions.telegramGroupId})` }).from(groupSessions),
+    db.select({ value: sql<number>`count(*)` }).from(groupSessions),
+    db.select({ value: sql<number>`count(*)` }).from(subscriptions).where(and(eq(subscriptions.status, "active"), sql`${subscriptions.endsAt} > now()`)),
+    db.select({ value: sql<number>`count(*)` }).from(subscriptionReceipts).where(eq(subscriptionReceipts.status, "pending")),
+    db.select({ value: sql<number>`count(*)` }).from(teacherSources).where(eq(teacherSources.status, "ready")),
+  ]);
+  return { profiles: Number(profiles[0]?.value ?? 0), teachers: Number(teachers[0]?.value ?? 0), students: Number(students[0]?.value ?? 0), groups: Number(groups[0]?.value ?? 0), sessions: Number(sessions[0]?.value ?? 0), activeSubscriptions: Number(activeSubscriptions[0]?.value ?? 0), pendingReceipts: Number(pendingReceipts[0]?.value ?? 0), sources: Number(sources[0]?.value ?? 0) };
+}
+
+export async function getAdminProfiles(limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(telegramProfiles).orderBy(desc(telegramProfiles.createdAt)).limit(limit);
+}
+
+export async function getAdminSessions(limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(groupSessions).orderBy(desc(groupSessions.createdAt)).limit(limit);
+}
+
+export async function getAdminReceipts(limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(subscriptionReceipts).orderBy(desc(subscriptionReceipts.createdAt)).limit(limit);
+}
+
+export async function getAdminSubscriptions(limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  return db.select().from(subscriptions).orderBy(desc(subscriptions.createdAt)).limit(limit);
+}
+
+export async function adminSetTelegramProfileRole(profileId: number, role: "teacher" | "student") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(telegramProfiles).set({ role }).where(eq(telegramProfiles.id, profileId));
+  return (await db.select().from(telegramProfiles).where(eq(telegramProfiles.id, profileId)).limit(1))[0];
+}
+
+export async function adminSetReceiptStatus(receiptId: string, status: "approved" | "rejected") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(subscriptionReceipts).set({ status, processedAt: new Date() }).where(eq(subscriptionReceipts.id, receiptId));
+  return (await db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.id, receiptId)).limit(1))[0];
+}
+
+export async function adminSetSubscriptionStatus(subscriptionId: string, status: "active" | "expired" | "cancelled") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(subscriptions).set({ status }).where(eq(subscriptions.id, subscriptionId));
+  return (await db.select().from(subscriptions).where(eq(subscriptions.id, subscriptionId)).limit(1))[0];
+}
+
+export async function adminSetSessionStatus(sessionId: string, status: "live" | "paused" | "ended") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(groupSessions).set({ status, endedAt: status === "ended" ? new Date() : undefined }).where(eq(groupSessions.id, sessionId));
+  return (await db.select().from(groupSessions).where(eq(groupSessions.id, sessionId)).limit(1))[0];
+}
+
 export async function createNotification(profileId: number, type: "assignment" | "session" | "general", body: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");

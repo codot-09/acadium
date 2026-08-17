@@ -147,3 +147,16 @@
 - [x] Approved receipt → subscription activationni idempotent qilish; bitta receipt faqat bitta subscription yaratsin.
 - [x] Duplicate receipt reuse va double-activation regression testlarini qo‘shish.
 - [x] Approved receipt bilan activateIndividualSubscription ikki marta chaqirilganda bitta subscription saqlanishini va existing row qaytishini regression test bilan tasdiqlash.
+
+## Admin panel release
+- [x] Admin login credentiallarini hardcode qilmasdan secure server secretlar orqali saqlash.
+- [x] Admin session/auth contracti va server-side admin-only authorization middleware/procedure yaratish.
+- [x] Admin dashboard uchun platform-wide teacher/student/group/session/subscription/receipt analytics querylarini qo‘shish.
+- [x] Admin uchun user, teacher access, group session va subscription/receipt moderation boshqaruvlarini qo‘shish.
+- [x] Responsive admin login va dashboard UI’ni mavjud workspace design system bilan ulash.
+- [x] Admin auth, authorization, analytics, moderation va UI regression testlarini yozish.
+- [x] Admin documentation, full test/build va desktop/mobile visual QAni bajarish.
+- [x] Admin sessions tabda pause/resume/end moderation UI’ni `admin.setSessionStatus` mutationiga ulash.
+- [x] Admin tRPC endpointlari uchun no-cookie 401, valid admin cookie success va moderation mutation authorization regression testlarini qo‘shish.
+- [x] Admin analytics va moderation contractlari uchun server-side Vitest coverage qo‘shish.
+- [x] Telegram external getMe testini network timeoutga chidamli controlled test strategy bilan full suite’da yashil qilish.
