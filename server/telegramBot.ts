@@ -1,5 +1,5 @@
 import { analyzeGroupMessage, generateGroupLessonBrief, type GroupLessonBrief } from "./ai";
-import { consumeTelegramGroupAnalysisRateLimit, createGroupSession, ensureSessionParticipant, ensureTeacherStudentLink, getActiveGroupSession, getGroupSessionSummary, getTeacherAiMode, getTeacherSourceContext, recordGroupSessionEvent, setTelegramProfileRole, updateGroupSessionStatus, upsertTelegramGroupMember, upsertTelegramProfile } from "./db";
+import { consumeTelegramGroupAnalysisRateLimit, createGroupSession, ensureSessionParticipant, ensureTeacherStudentLink, getActiveGroupSession, getGroupSessionSummary, getSubscriptionStatus, getTeacherAiMode, getTeacherSourceContext, recordGroupSessionEvent, setTelegramProfileRole, updateGroupSessionStatus, upsertTelegramGroupMember, upsertTelegramProfile } from "./db";
 
 export type TelegramUpdate = {
   update_id?: number;
@@ -120,6 +120,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     if (!command.argument) { await sendTelegramMessage(chat.id, "Format: <code>/lesson fotosintez-8-sinf</code>"); return; }
     const active = await getActiveGroupSession(String(chat.id));
     if (active) { await sendTelegramMessage(chat.id, `<b>Lesson allaqachon davom etmoqda.</b>\n\nTopic: ${active.topic}`); return; }
+    const subscription = await getSubscriptionStatus(profile.id);
+    if (!subscription.canStartSession) {
+      await sendTelegramMessage(chat.id, "Bepul 3 ta session limiti tugadi. Davom etish uchun Acadium Web App’da 99 000 UZS / 1 oylik Individual obunani faollashtiring va Click chekini yuklang. Enterprise reja uchun @otabek_nabiyev1 ga murojaat qiling.");
+      return;
+    }
     const aiMode = await getTeacherAiMode(profile.id);
     const sources = aiMode === "local" ? await getTeacherSourceContext(profile.id) : [];
     let brief: GroupLessonBrief;

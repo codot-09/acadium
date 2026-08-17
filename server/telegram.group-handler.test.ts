@@ -18,6 +18,7 @@ const dbMocks = vi.hoisted(() => ({
   upsertTelegramGroupMember: vi.fn(),
   upsertTelegramProfile: vi.fn(),
   getGroupSessionSummary: vi.fn(),
+  getSubscriptionStatus: vi.fn(),
   consumeTelegramGroupAnalysisRateLimit: vi.fn(),
 }));
 
@@ -39,6 +40,7 @@ describe("Telegram group lesson handler", () => {
     dbMocks.recordGroupSessionEvent.mockResolvedValue(true);
     dbMocks.setTelegramProfileRole.mockResolvedValue({ id: 10, role: "teacher" });
     dbMocks.getGroupSessionSummary.mockResolvedValue({ attendance: 2, responses: 1, questions: 1, analyzed: 1 });
+    dbMocks.getSubscriptionStatus.mockResolvedValue({ canStartSession: true, sessionsUsed: 0, sessionsRemaining: 3, hasActiveSubscription: false });
     dbMocks.consumeTelegramGroupAnalysisRateLimit.mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes("getMe")) return new Response(JSON.stringify({ ok: true, result: { id: 999 } }), { status: 200 });
@@ -54,7 +56,14 @@ describe("Telegram group lesson handler", () => {
     expect(dbMocks.recordGroupSessionEvent).toHaveBeenCalled();
   });
 
-  it("starts a session and sends the intro when the AI layer returns a fallback brief", async () => {
+  it("blocks a fourth lesson until an active subscription exists", async () => {
+    dbMocks.getSubscriptionStatus.mockResolvedValueOnce({ canStartSession: false, sessionsUsed: 3, sessionsRemaining: 0, hasActiveSubscription: false });
+    await handleTelegramUpdate({ update_id: 110, message: { chat: { id: -101, type: "supergroup", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/lesson next-topic" } });
+    expect(dbMocks.createGroupSession).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("Bepul 3 ta session limiti tugadi") }));
+  });
+
+  it("starts a lesson and sends the intro when the AI layer returns a fallback brief", async () => {
     aiMocks.generateGroupLessonBrief.mockResolvedValueOnce({ title: "Fotosintez 8 sinf", overview: "Safe starter", objectives: ["Understand"], keyPoints: ["Key point"], resources: [{ title: "Search", summary: "Use a trusted textbook", searchQuery: "fotosintez 8 sinf" }], firstQuestion: "Fotosintez nima?" });
     await handleTelegramUpdate({ update_id: 109, message: { chat: { id: -101, type: "supergroup", title: "Class" }, from: { id: 7, first_name: "Teacher" }, text: "/lesson fotosintez-8-sinf" } });
     expect(dbMocks.createGroupSession).toHaveBeenCalledWith(expect.objectContaining({ title: "Fotosintez 8 sinf", topic: "fotosintez-8-sinf" }));

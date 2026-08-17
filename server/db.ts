@@ -18,6 +18,8 @@ import {
   teacherInvites,
   teacherSources,
   teacherAiSettings,
+  subscriptionReceipts,
+  subscriptions,
   telegramProfiles,
   type InsertUser,
   users,
@@ -440,6 +442,49 @@ export async function getGroupSessionSummary(sessionId: string) {
     db.select().from(groupSessionEvents).where(eq(groupSessionEvents.sessionId, sessionId)),
   ]);
   return { session: session[0], attendance: members.length, responses: events.filter(event => event.eventType === "answer").length, questions: events.filter(event => event.eventType === "question").length, analyzed: events.filter(event => Boolean(event.analysisJson)).length, lastActivity: events.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]?.createdAt ?? null };
+}
+
+export async function getSubscriptionStatus(profileId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const now = new Date();
+  const [sessionRows, activeRows, latestReceiptRows] = await Promise.all([
+    db.select({ id: groupSessions.id }).from(groupSessions).where(eq(groupSessions.teacherProfileId, profileId)),
+    db.select().from(subscriptions).where(and(eq(subscriptions.profileId, profileId), eq(subscriptions.status, "active"), sql`${subscriptions.endsAt} > ${now}`)).orderBy(desc(subscriptions.endsAt)).limit(1),
+    db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.profileId, profileId)).orderBy(desc(subscriptionReceipts.createdAt)).limit(1),
+  ]);
+  const activeSubscription = activeRows[0] ?? null;
+  return { freeSessionLimit: 3, sessionsUsed: sessionRows.length, sessionsRemaining: Math.max(0, 3 - sessionRows.length), hasActiveSubscription: Boolean(activeSubscription), activeSubscription, latestReceipt: latestReceiptRows[0] ?? null, canStartSession: Boolean(activeSubscription) || sessionRows.length < 3 };
+}
+
+export async function createSubscriptionReceipt(input: { id: string; profileId: number; fileName: string; storageKey: string; mimeType: string; sizeBytes: number; fingerprint: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.insert(subscriptionReceipts).values(input);
+  return (await db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.id, input.id)).limit(1))[0]!;
+}
+
+export async function updateSubscriptionReceiptAnalysis(input: { id: string; status: "approved" | "rejected"; parsedAmount?: number; parsedCurrency?: string; confidence: number; analysisReason: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.update(subscriptionReceipts).set({ status: input.status, parsedAmount: input.parsedAmount, parsedCurrency: input.parsedCurrency, confidence: input.confidence, analysisReason: input.analysisReason, processedAt: new Date() }).where(eq(subscriptionReceipts.id, input.id));
+  return (await db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.id, input.id)).limit(1))[0]!;
+}
+
+export async function activateIndividualSubscription(input: { profileId: number; receiptId: string; amount: number; startsAt?: Date }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const startsAt = input.startsAt ?? new Date();
+  const endsAt = new Date(startsAt.getTime() + 31 * 24 * 60 * 60 * 1000);
+  const existing = await db.select().from(subscriptions).where(eq(subscriptions.receiptId, input.receiptId)).limit(1);
+  if (existing[0]) return existing[0];
+  const id = nanoid();
+  try { await db.insert(subscriptions).values({ id, profileId: input.profileId, plan: "individual", status: "active", amount: input.amount, currency: "UZS", startsAt, endsAt, receiptId: input.receiptId }); } catch {
+    const raced = await db.select().from(subscriptions).where(eq(subscriptions.receiptId, input.receiptId)).limit(1);
+    if (raced[0]) return raced[0];
+    throw new Error("Subscription activation failed");
+  }
+  return (await db.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1))[0]!;
 }
 
 export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string; aiMode?: "web" | "local"; sourceIdsJson?: string; lessonBriefJson?: string }) {

@@ -109,6 +109,36 @@ export const teacherAiSettings = mysqlTable("teacher_ai_settings", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const subscriptionReceipts = mysqlTable("subscription_receipts", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  profileId: int("profileId").notNull(),
+  fileName: varchar("fileName", { length: 256 }).notNull(),
+  storageKey: text("storageKey").notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  fingerprint: varchar("fingerprint", { length: 64 }).notNull().unique(),
+  status: mysqlEnum("receiptStatus", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  parsedAmount: int("parsedAmount"),
+  parsedCurrency: varchar("parsedCurrency", { length: 16 }),
+  confidence: int("confidence"),
+  analysisReason: text("analysisReason"),
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("subscription_receipts_profile_idx").on(table.profileId), index("subscription_receipts_status_idx").on(table.status)]);
+
+export const subscriptions = mysqlTable("subscriptions", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  profileId: int("profileId").notNull(),
+  plan: mysqlEnum("subscriptionPlan", ["individual", "enterprise"]).notNull(),
+  status: mysqlEnum("subscriptionStatus", ["active", "expired", "cancelled"]).default("active").notNull(),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 16 }).default("UZS").notNull(),
+  startsAt: timestamp("startsAt").notNull(),
+  endsAt: timestamp("endsAt").notNull(),
+  receiptId: varchar("receiptId", { length: 32 }).unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("subscriptions_profile_idx").on(table.profileId), index("subscriptions_active_idx").on(table.profileId, table.status, table.endsAt)]);
+
 export const groupSessions = mysqlTable("group_sessions", {
   id: varchar("id", { length: 32 }).primaryKey(),
   teacherProfileId: int("teacherProfileId").notNull(),

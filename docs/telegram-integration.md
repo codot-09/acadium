@@ -51,3 +51,13 @@ Teacher botni o‘z guruhiga administrator qilib qo‘shadi. Bot webhooki produc
 Dars paytida teacher `/ask Fotosintezning asosiy bosqichi nima?` komandasi bilan savol yuboradi. Groupdagi oddiy student xabarlari va `chat_member` qo‘shilish eventlari session rosteriga yoziladi, teacher-student linki idempotent tarzda yaratiladi va participation eventlari Analyze menyusida ko‘rinadi. `/endlesson` sessionni tugatadi va saqlangan student activity keyinchalik teacher dashboardida ishlatiladi.
 
 Guruhdagi eventlar to‘liq ko‘rinishi uchun bot administrator bo‘lishi va Telegram privacy mode sozlamasi group darslari talabiga mos bo‘lishi kerak. Botni guruhga qo‘shish va BotFather sozlamalari teacher tomonidan Telegram’da bajariladi.
+
+## Subscription va to‘lov oqimi
+
+Acadium har bir teacher uchun dastlabki **3 ta group lesson session**ni bepul taqdim etadi. To‘rtinchi yangi sessionni boshlashdan oldin faol subscription talab qilinadi; mavjud sessionlar, analytics va source library ko‘rish oqimi saqlanadi.
+
+Individual reja **99 000 UZS / 1 oy** turadi. Teacher Web App ichidagi **Subscription** bo‘limida `Pay with Click` tugmasi Click to‘lov sahifasini ochadi. To‘lovdan keyin teacher PDF, JPG, PNG yoki WEBP chekni yuklaydi. Acadium chekni server tomonda saqlaydi, AI orqali ko‘rinadigan summa, valyuta, muvaffaqiyatli payment holati va ishonchlilikni tekshiradi; faqat aniq **99 000 UZS** va yuqori ishonchli chek approved bo‘lganda 31 kunlik Individual subscription faollashadi.
+
+Enterprise reja o‘quv markazlari va jamoalar uchun mo‘ljallangan. Narx, seats va onboarding masalalari bo‘yicha Telegram’da [@otabek_nabiyev1](https://t.me/otabek_nabiyev1) bilan bog‘laniladi. Botdagi free limit xabari ham shu murojaat yo‘lini ko‘rsatadi.
+
+Chek yuklashda faqat o‘z to‘lovingizga tegishli, o‘qilishi aniq receipt yuboring. Bot tokeni, Telegram `initData` yoki boshqa maxfiy ma’lumotlarni chek fayliga qo‘shmang.

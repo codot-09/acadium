@@ -132,3 +132,18 @@
 - [x] Local mode group lesson va reply analysisga persisted source snapshot contexti uzatilishini integration testda tasdiqlash.
 - [x] Source upload endpointda teacher auth, supported type va 15 MB limit regressionlarini testlash.
 - [x] Teacher source library va Web/Local mode UI oqimini component testda tasdiqlash.
+
+## Subscription release
+- [x] Individual va Enterprise subscription domain modelini, 99 000 so‘m narxini va 3 ta bepul session entitlement qoidalarini yaratish.
+- [x] Subscription DB schema, migration, ownership checks va query/mutation contractlarini qo‘shish.
+- [x] Click payment linki, receipt upload/storage va AI receipt verification oqimini secure qilish.
+- [x] AI tasdiqlangan chek asosida individual subscriptionni bir oylik entitlement sifatida aktivlashtirish.
+- [x] 3 ta free sessiondan keyin Telegram group lesson va Web App session oqimiga subscription gating qo‘shish.
+- [x] Enterprise plan uchun @otabek_nabiyev1 Telegram contact CTA va UI oqimini qo‘shish.
+- [x] Subscription management UI’ni desktop/mobile responsive va existing workspace bilan uyg‘un qilish.
+- [x] Subscription, receipt verification, gating va UI uchun Vitest regression testlar yozish.
+- [x] Subscription setup guide/documentationni yangilash va production visual QA o‘tkazish.
+- [x] Receipt fingerprint orqali bir xil Click cheki qayta ishlatilishini bloklash.
+- [x] Approved receipt → subscription activationni idempotent qilish; bitta receipt faqat bitta subscription yaratsin.
+- [x] Duplicate receipt reuse va double-activation regression testlarini qo‘shish.
+- [x] Approved receipt bilan activateIndividualSubscription ikki marta chaqirilganda bitta subscription saqlanishini va existing row qaytishini regression test bilan tasdiqlash.

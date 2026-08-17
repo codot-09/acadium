@@ -16,6 +16,7 @@ import { registerTelegramWebhook } from "../telegramBot";
 import type { TelegramUpdate } from "../telegramBot";
 import { createTelegramWebhookApp } from "../telegramWebhookRoute";
 import { createSourceUploadHandler } from "../sourceUpload";
+import { createSubscriptionReceiptUploadHandler } from "../subscriptionUpload";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -45,6 +46,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.post("/api/teacher/sources/upload", createSourceUploadHandler());
+  app.post("/api/subscription/receipts/upload", createSubscriptionReceiptUploadHandler());
   app.post("/api/ai/stream", async (req, res) => {
     try {
       const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";

@@ -19,6 +19,7 @@ const dbMocks = vi.hoisted(() => ({
   upsertTelegramGroupMember: vi.fn(),
   upsertTelegramProfile: vi.fn(),
   consumeTelegramGroupAnalysisRateLimit: vi.fn(),
+  getSubscriptionStatus: vi.fn(),
 }));
 
 vi.mock("./ai", () => aiMocks);
@@ -78,6 +79,7 @@ describe("production-parity /lesson webhook replay", () => {
     dbMocks.ensureSessionParticipant.mockResolvedValue(true);
     dbMocks.recordGroupSessionEvent.mockResolvedValue(true);
     dbMocks.setTelegramProfileRole.mockResolvedValue({ id: 10, role: "teacher" });
+    dbMocks.getSubscriptionStatus.mockResolvedValue({ canStartSession: true, sessionsUsed: 0, sessionsRemaining: 3, hasActiveSubscription: false });
     const originalFetch = globalThis.fetch;
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith("http://127.0.0.1")) return originalFetch(url, init);

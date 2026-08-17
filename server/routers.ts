@@ -32,8 +32,10 @@ import {
   saveMessage,
   setTelegramProfileRole,
   upsertTelegramProfile,
+  getSubscriptionStatus,
 } from "./db";
 import { verifyTelegramInitData } from "./telegram";
+import { CLICK_PAYMENT_URL, ENTERPRISE_CONTACT, INDIVIDUAL_PRICE_UZS } from "./subscriptions";
 
 const telegramInput = z.object({ initData: z.string().min(1) });
 
@@ -99,6 +101,12 @@ export const appRouter = router({
       const profile = await getTelegramProfile(input.initData);
       if (profile.role !== "teacher") throw new TRPCError({ code: "FORBIDDEN", message: "Teacher analytics access is required" });
       return getTeacherAnalytics(profile.id);
+    }),
+  }),
+  subscription: router({
+    status: publicProcedure.input(telegramInput).query(async ({ input }) => {
+      const profile = await getTelegramProfile(input.initData);
+      return { profile: { id: profile.id, role: profile.role }, ...await getSubscriptionStatus(profile.id), individualPrice: INDIVIDUAL_PRICE_UZS, currency: "UZS", clickPaymentUrl: CLICK_PAYMENT_URL, enterpriseContact: ENTERPRISE_CONTACT };
     }),
   }),
   chat: router({
@@ -176,6 +184,8 @@ export const appRouter = router({
     }),
     startGroupSession: publicProcedure.input(telegramInput.extend({ telegramGroupId: z.string().min(1), groupTitle: z.string().min(1), title: z.string().min(3), topic: z.string().min(3) })).mutation(async ({ input }) => {
       const teacher = await requireTeacher(input.initData);
+      const subscription = await getSubscriptionStatus(teacher.id);
+      if (!subscription.canStartSession) throw new TRPCError({ code: "FORBIDDEN", message: "The free 3-session limit is used. Activate an Individual subscription to continue." });
       return createGroupSession({ teacherProfileId: teacher.id, telegramGroupId: input.telegramGroupId, groupTitle: input.groupTitle, title: input.title, topic: input.topic });
     }),
     sessions: publicProcedure.input(telegramInput).query(async ({ input }) => {

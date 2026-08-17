@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/trpc", () => ({ trpc: {
+  subscription: { status: { useQuery: () => ({ data: { hasActiveSubscription: false, sessionsRemaining: 3, individualPrice: 99000, clickPaymentUrl: "https://my.click.uz/test", enterpriseContact: "https://t.me/otabek_nabiyev1", latestReceipt: null }, isLoading: false, refetch: vi.fn() }) } },
   telegram: {
     bootstrap: { useMutation: () => ({ mutate: vi.fn(), data: { id: 10, firstName: "Teacher", role: state.bootstrapRole }, isPending: false, isError: false }) },
     analytics: { useQuery: () => ({ data: state.analytics, isFetching: false, refetch: calls.analyticsRefetch }) },
@@ -161,6 +162,15 @@ describe("group-first teacher workspace", () => {
     await waitFor(() => expect(screen.getByText("Biology book.txt")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Archive Biology book.txt" }));
     expect(calls.archiveMutate).toHaveBeenCalledWith({ initData: "telegram-init-data", sourceId: "source-1" });
+  });
+
+  it("opens subscription plans with Click payment and Enterprise contact actions", async () => {
+    render(<Home />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Subscription/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Subscription/i }));
+    expect(screen.getByText("Keep your teaching momentum")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Pay with Click/i })).toHaveAttribute("href", "https://my.click.uz/test");
+    expect(screen.getByRole("link", { name: /Contact @otabek_nabiyev1/i })).toBeInTheDocument();
   });
 
   it("shows a useful empty state when no group sessions exist", async () => {
