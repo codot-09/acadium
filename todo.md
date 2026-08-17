@@ -168,3 +168,12 @@
 - [x] Admin reject actioni subscriptionni faollashtirmasligi va statuslarni izchil saqlashini tasdiqlash.
 - [x] Existing teacher receipt flow, duplicate protection va admin receipt review uchun regression testlarni kengaytirish.
 - [x] Receipt review UI feedback va status refreshni yaxshilash; qolgan payment funksiyalarini o‘zgartirmaslik.
+
+## Final design system release
+- [x] Teacher workspace, Admin panel, Subscription panel va auth states uchun mavjud visual patternsni audit qilish.
+- [x] Acadium unified design tokens: color roles, type scale, spacing, radius, shadows, focus va motion qoidalarini yaratish.
+- [x] Shared app shell, navigation, header, cards, tables, badges, buttons va empty/loading statesni synchron qilish.
+- [x] Teacher workspace layoutini ecosystem visual language bilan qayta ishlash; funksional tRPC oqimlarini o‘zgartirmaslik.
+- [x] Subscription va Admin UI’ni shared component hierarchy va responsive behaviorga o‘tkazish.
+- [x] Mobile, tablet va desktop breakpointlarda overflow, touch target, focus, contrast va hierarchy QAni bajarish.
+- [x] Visual regression/component tests, production build va multi-viewport screenshot QAni yakunlash.

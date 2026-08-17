@@ -28,17 +28,17 @@ describe("admin panel", () => {
 
   it("renders a password-protected login and submits credentials", async () => {
     render(<AdminPage />);
-    expect(screen.getByRole("heading", { name: "Admin panel" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Control the learning ecosystem" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Login"), { target: { value: "onabiyev626@gmail.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "otabek09" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enter admin panel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enter control room" }));
     await waitFor(() => expect(state.loginMutate).toHaveBeenCalledWith({ login: "onabiyev626@gmail.com", password: "otabek09" }));
   });
 
   it("shows platform KPIs and moderation tabs after admin authentication", () => {
     state.authenticated = true;
     render(<AdminPage />);
-    expect(screen.getByRole("heading", { name: "Platform command center" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Learning ecosystem control room" })).toBeTruthy();
     expect(screen.getByText("Pending receipt queue")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Receipts" }));
     expect(screen.getByText("receipt.png")).toBeTruthy();
