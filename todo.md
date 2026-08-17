@@ -160,3 +160,11 @@
 - [x] Admin tRPC endpointlari uchun no-cookie 401, valid admin cookie success va moderation mutation authorization regression testlarini qo‘shish.
 - [x] Admin analytics va moderation contractlari uchun server-side Vitest coverage qo‘shish.
 - [x] Telegram external getMe testini network timeoutga chidamli controlled test strategy bilan full suite’da yashil qilish.
+
+## Payment verification hardening
+- [x] Receipt AI contractini amount, currency, payment date, recipient/payment reference, authenticity signals va uncertainty reasonlar bilan kuchaytirish.
+- [x] AI tekshiruv natijasini receipt metadata sifatida saqlash va admin review uchun aniq ko‘rsatish.
+- [x] Admin approve actioni receipt statusini yangilab, Individual subscriptionni idempotent tarzda faollashtirishini tasdiqlash.
+- [x] Admin reject actioni subscriptionni faollashtirmasligi va statuslarni izchil saqlashini tasdiqlash.
+- [x] Existing teacher receipt flow, duplicate protection va admin receipt review uchun regression testlarni kengaytirish.
+- [x] Receipt review UI feedback va status refreshni yaxshilash; qolgan payment funksiyalarini o‘zgartirmaslik.

@@ -17,3 +17,9 @@ Production smoke test uchun `/admin` sahifasini oching, noto‘g‘ri login bila
 ## Test rejimi
 
 Local va CI full suite external Telegram networkga bog‘lanmaydi: `pnpm test` token secret konfiguratsiyasini tekshiradi, `getMe` live check esa faqat `RUN_EXTERNAL_INTEGRATION_TESTS=true pnpm test` bilan opt-in ishlaydi. Bu offline testlarni deterministik saqlaydi, real Telegram smoke verificationni esa alohida controlled bosqichga ajratadi.
+
+## Receipt forensics va manual approval
+
+Receipt upload qilinganda AI amount, currency, successful/pending/refunded status, recipient, transaction ID, payment date, visible evidence va fraud signalsni ajratib oladi. Server AI yuborgan `approved` flagga ko‘r-ko‘rona ishonmaydi: **99 000 UZS**, `success` statusi, transaction ID, recipient, valid payment date, kamida ikki ko‘rinadigan evidence, kamida 90% confidence va fraud signal yo‘qligi birgalikda tekshiriladi. Noaniq yoki AI tahlili xato bo‘lgan chek subscriptionni darhol faollashtirmaydi; u `pending` holatda Admin → Receipts review queue’ga tushadi.
+
+Admin receiptni ko‘rib `Approve` qilsa, server receiptni `approved` deb belgilaydi va summa 99 000 UZS bo‘lsa, receiptId unique constraint asosida Individual subscriptionni idempotent faollashtiradi. `Reject` actioni subscription yaratmaydi. Har ikki actiondan keyin receipt, subscription va Overview KPI querylari yangilanadi.

@@ -122,6 +122,13 @@ export const subscriptionReceipts = mysqlTable("subscription_receipts", {
   parsedCurrency: varchar("parsedCurrency", { length: 16 }),
   confidence: int("confidence"),
   analysisReason: text("analysisReason"),
+  paymentStatus: varchar("paymentStatus", { length: 24 }),
+  recipient: varchar("recipient", { length: 256 }),
+  transactionId: varchar("transactionId", { length: 128 }),
+  paidAt: timestamp("paidAt"),
+  evidenceJson: text("evidenceJson"),
+  fraudSignalsJson: text("fraudSignalsJson"),
+  analysisVersion: varchar("analysisVersion", { length: 32 }),
   processedAt: timestamp("processedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("subscription_receipts_profile_idx").on(table.profileId), index("subscription_receipts_status_idx").on(table.status)]);

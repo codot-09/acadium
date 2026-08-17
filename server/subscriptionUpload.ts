@@ -42,11 +42,12 @@ export function createSubscriptionReceiptUploadHandler(overrides: Partial<{
       }
       try {
         const analysis = await deps.analyze({ url: stored.url, mimeType });
-        const saved = await deps.updateReceipt({ id, status: analysis.approved ? "approved" : "rejected", parsedAmount: analysis.amount, parsedCurrency: analysis.currency, confidence: analysis.confidence, analysisReason: analysis.reason });
+        const paidAt = analysis.paidAt ? new Date(analysis.paidAt) : undefined;
+        const saved = await deps.updateReceipt({ id, status: analysis.approved ? "approved" : "pending", parsedAmount: analysis.amount, parsedCurrency: analysis.currency, confidence: analysis.confidence, analysisReason: analysis.reason, paymentStatus: analysis.paymentStatus, recipient: analysis.recipient, transactionId: analysis.transactionId, paidAt: paidAt && !Number.isNaN(paidAt.getTime()) ? paidAt : undefined, evidence: analysis.evidence, fraudSignals: analysis.fraudSignals, analysisVersion: analysis.analysisVersion });
         const subscription = analysis.approved ? await deps.activate({ profileId: profile.id, receiptId: id, amount: INDIVIDUAL_PRICE_UZS }) : null;
-        return res.status(201).json({ receipt: { ...saved, storageKey: undefined }, subscription, approved: analysis.approved, message: analysis.approved ? "Receipt approved. Individual subscription is active." : "Receipt needs review or could not be verified." });
+        return res.status(201).json({ receipt: { ...saved, storageKey: undefined }, subscription, approved: analysis.approved, reviewRequired: !analysis.approved, message: analysis.approved ? "Receipt approved. Individual subscription is active." : "Receipt is queued for admin review. Subscription will activate after approval." });
       } catch (error) {
-        await deps.updateReceipt({ id, status: "rejected", confidence: 0, analysisReason: error instanceof Error ? error.message : "Receipt analysis failed" });
+        await deps.updateReceipt({ id, status: "pending", confidence: 0, analysisReason: "Automatic verification failed; admin review is required.", paymentStatus: "unknown", fraudSignals: [error instanceof Error ? error.message : "Receipt analysis failed"], analysisVersion: "click-v2" });
         return res.status(422).json({ error: "Receipt could not be verified automatically. Please upload a clear Click payment receipt." });
       }
     } catch (error) {

@@ -464,10 +464,10 @@ export async function createSubscriptionReceipt(input: { id: string; profileId: 
   return (await db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.id, input.id)).limit(1))[0]!;
 }
 
-export async function updateSubscriptionReceiptAnalysis(input: { id: string; status: "approved" | "rejected"; parsedAmount?: number; parsedCurrency?: string; confidence: number; analysisReason: string }) {
+export async function updateSubscriptionReceiptAnalysis(input: { id: string; status: "pending" | "approved" | "rejected"; parsedAmount?: number; parsedCurrency?: string; confidence: number; analysisReason: string; paymentStatus?: string; recipient?: string; transactionId?: string; paidAt?: Date; evidence?: string[]; fraudSignals?: string[]; analysisVersion?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  await db.update(subscriptionReceipts).set({ status: input.status, parsedAmount: input.parsedAmount, parsedCurrency: input.parsedCurrency, confidence: input.confidence, analysisReason: input.analysisReason, processedAt: new Date() }).where(eq(subscriptionReceipts.id, input.id));
+  await db.update(subscriptionReceipts).set({ status: input.status, parsedAmount: input.parsedAmount, parsedCurrency: input.parsedCurrency, confidence: input.confidence, analysisReason: input.analysisReason, paymentStatus: input.paymentStatus, recipient: input.recipient, transactionId: input.transactionId, paidAt: input.paidAt, evidenceJson: input.evidence ? JSON.stringify(input.evidence) : undefined, fraudSignalsJson: input.fraudSignals ? JSON.stringify(input.fraudSignals) : undefined, analysisVersion: input.analysisVersion, processedAt: new Date() }).where(eq(subscriptionReceipts.id, input.id));
   return (await db.select().from(subscriptionReceipts).where(eq(subscriptionReceipts.id, input.id)).limit(1))[0]!;
 }
 

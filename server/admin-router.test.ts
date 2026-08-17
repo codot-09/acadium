@@ -36,5 +36,8 @@ describe("admin tRPC authorization", () => {
     expect(dbMocks.adminSetTelegramProfileRole).toHaveBeenCalledWith(4, "teacher");
     expect(dbMocks.adminSetSessionStatus).toHaveBeenCalledWith("session-1", "paused");
     expect(dbMocks.activateIndividualSubscription).toHaveBeenCalledWith({ profileId: 4, receiptId: "receipt-1", amount: 99000 });
+    dbMocks.activateIndividualSubscription.mockClear();
+    await expect(caller.admin.setReceiptStatus({ receiptId: "receipt-1", status: "rejected" })).resolves.toMatchObject({ id: "receipt-1" });
+    expect(dbMocks.activateIndividualSubscription).not.toHaveBeenCalled();
   });
 });

@@ -85,6 +85,13 @@
       "when": 1786955070128,
       "tag": "0011_bouncy_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1786959823099,
+      "tag": "0012_dapper_shooting_star",
+      "breakpoints": true
     }
   ]
 }
