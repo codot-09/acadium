@@ -12,6 +12,7 @@ const dbMocks = vi.hoisted(() => ({
   adminSetSubscriptionStatus: vi.fn(async () => ({ id: "subscription-1", status: "cancelled" })),
   adminSetSessionStatus: vi.fn(async () => ({ id: "session-1", status: "paused" })),
   activateIndividualSubscription: vi.fn(async () => ({ id: "subscription-1" })),
+  adminActivateCustomSubscription: vi.fn(async (input: { profileId: number; plan: string; amount: number; currency: string; durationDays: number }) => ({ created: true, subscription: { id: "custom-1", ...input } })),
 }));
 vi.mock("./db", () => dbMocks);
 
@@ -25,6 +26,14 @@ describe("admin tRPC authorization", () => {
   it("rejects analytics without an admin cookie", async () => {
     await expect(appRouter.createCaller(context()).admin.overview()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(dbMocks.getAdminOverview).not.toHaveBeenCalled();
+  });
+
+  it("rejects custom activation without an admin cookie and validates the input contract", async () => {
+    await expect(appRouter.createCaller(context()).admin.activateCustomSubscription({ profileId: 4, plan: "individual", amount: 99000, currency: "UZS", durationDays: 31 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    const caller = appRouter.createCaller(context(`acadium_admin_session=${createAdminSession()}`));
+    await expect(caller.admin.activateCustomSubscription({ profileId: 4, plan: "individual", amount: 99000, currency: "uzs", durationDays: 31 })).resolves.toMatchObject({ created: true });
+    expect(dbMocks.adminActivateCustomSubscription).toHaveBeenCalledWith({ profileId: 4, plan: "individual", amount: 99000, currency: "UZS", durationDays: 31 });
+    await expect(caller.admin.activateCustomSubscription({ profileId: 4, plan: "individual", amount: -1, currency: "UZS", durationDays: 31 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("allows valid admin sessions and protects moderation mutations", async () => {

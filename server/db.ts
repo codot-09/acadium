@@ -487,6 +487,21 @@ export async function activateIndividualSubscription(input: { profileId: number;
   return (await db.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1))[0]!;
 }
 
+export async function adminActivateCustomSubscription(input: { profileId: number; plan: "individual" | "enterprise"; amount: number; currency: string; durationDays: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const profile = await db.select({ id: telegramProfiles.id }).from(telegramProfiles).where(eq(telegramProfiles.id, input.profileId)).limit(1);
+  if (!profile[0]) throw new Error("Telegram profile not found");
+  const now = new Date();
+  const existing = await db.select().from(subscriptions).where(and(eq(subscriptions.profileId, input.profileId), eq(subscriptions.status, "active"), sql`${subscriptions.endsAt} > ${now}`)).orderBy(desc(subscriptions.endsAt)).limit(1);
+  if (existing[0]) return { subscription: existing[0], created: false as const };
+  const id = nanoid();
+  const endsAt = new Date(now.getTime() + input.durationDays * 86_400_000);
+  await db.insert(subscriptions).values({ id, profileId: input.profileId, plan: input.plan, status: "active", amount: input.amount, currency: input.currency, startsAt: now, endsAt, receiptId: null });
+  const subscription = (await db.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1))[0]!;
+  return { subscription, created: true as const };
+}
+
 export async function createGroupSession(input: { teacherProfileId: number; telegramGroupId: string; groupTitle: string; title: string; topic: string; aiMode?: "web" | "local"; sourceIdsJson?: string; lessonBriefJson?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");

@@ -177,3 +177,11 @@
 - [x] Subscription va Admin UI’ni shared component hierarchy va responsive behaviorga o‘tkazish.
 - [x] Mobile, tablet va desktop breakpointlarda overflow, touch target, focus, contrast va hierarchy QAni bajarish.
 - [x] Visual regression/component tests, production build va multi-viewport screenshot QAni yakunlash.
+
+## Custom admin subscription release
+- [x] Admin user/profile tanlash va custom subscription inputlarini server contractga qo‘shish.
+- [x] Admin-only custom activation mutationini plan, amount, currency, duration va status validation bilan yaratish.
+- [x] Existing active subscriptionni xavfsiz yangilash yoki custom subscriptionni idempotent yaratish qoidalarini qo‘shish.
+- [x] Admin panelda user uchun custom subscription activation formasi va success/error feedbackni qo‘shish.
+- [x] Custom activation authorization, validation, idempotency va UI regression testlarini yozish.
+- [x] Desktop/mobile QA, full test/build va documentationni yangilash; qolgan payment funksiyalarini o‘zgartirmaslik.

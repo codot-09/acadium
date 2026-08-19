@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AdminPage from "./Admin";
 
-const state = vi.hoisted(() => ({ authenticated: false, loginMutate: vi.fn(), logoutMutate: vi.fn(), roleMutate: vi.fn(), receiptMutate: vi.fn() }));
+const state = vi.hoisted(() => ({ authenticated: false, loginMutate: vi.fn(), logoutMutate: vi.fn(), roleMutate: vi.fn(), receiptMutate: vi.fn(), customMutate: vi.fn() }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
-  useUtils: () => ({ admin: { me: { invalidate: vi.fn() }, overview: { invalidate: vi.fn() }, profiles: { invalidate: vi.fn() }, receipts: { invalidate: vi.fn() } } }),
+  useUtils: () => ({ admin: { me: { invalidate: vi.fn() }, overview: { invalidate: vi.fn() }, profiles: { invalidate: vi.fn() }, receipts: { invalidate: vi.fn() }, subscriptions: { invalidate: vi.fn() }, sessions: { invalidate: vi.fn() } } }),
   admin: {
     me: { useQuery: () => ({ data: { authenticated: state.authenticated }, isLoading: false, refetch: vi.fn() }) },
     login: { useMutation: (options: { onSuccess?: () => void }) => ({ mutate: (...args: unknown[]) => { state.loginMutate(...args); options.onSuccess?.(); }, isPending: false }) },
@@ -20,11 +20,13 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     setReceiptStatus: { useMutation: () => ({ mutate: state.receiptMutate, isPending: false }) },
     setSubscriptionStatus: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     setSessionStatus: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    activateCustomSubscription: { useMutation: () => ({ mutate: state.customMutate, isPending: false }) },
   },
 } }));
 
 describe("admin panel", () => {
-  beforeEach(() => { state.authenticated = false; state.loginMutate.mockReset(); state.logoutMutate.mockReset(); });
+  afterEach(() => cleanup());
+  beforeEach(() => { state.authenticated = false; state.loginMutate.mockReset(); state.logoutMutate.mockReset(); state.customMutate.mockReset(); });
 
   it("renders a password-protected login and submits credentials", async () => {
     render(<AdminPage />);
@@ -33,6 +35,16 @@ describe("admin panel", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "otabek09" } });
     fireEvent.click(screen.getByRole("button", { name: "Enter control room" }));
     await waitFor(() => expect(state.loginMutate).toHaveBeenCalledWith({ login: "onabiyev626@gmail.com", password: "otabek09" }));
+  });
+
+  it("activates a custom subscription for a selected profile", () => {
+    state.authenticated = true;
+    render(<AdminPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Subscriptions" }));
+    fireEvent.change(screen.getByLabelText("User"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Duration (days)"), { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("button", { name: "Activate custom subscription" }));
+    expect(state.customMutate).toHaveBeenCalledWith({ profileId: 1, plan: "individual", amount: 99000, currency: "UZS", durationDays: 90 });
   });
 
   it("shows platform KPIs and moderation tabs after admin authentication", () => {
